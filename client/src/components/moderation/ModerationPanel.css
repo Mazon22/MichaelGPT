@@ -1,0 +1,358 @@
+.mod-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 280;
+}
+
+.mod-panel {
+  position: fixed;
+  right: 22px;
+  bottom: 88px;
+  width: min(760px, calc(100vw - 24px));
+  height: min(76vh, 680px);
+  background: linear-gradient(155deg, rgba(20, 10, 46, 0.98), rgba(10, 8, 30, 0.98));
+  border: 1px solid rgba(244, 114, 248, 0.32);
+  border-radius: 18px;
+  z-index: 290;
+  display: grid;
+  grid-template-rows: auto auto auto 1fr auto;
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+
+.mod-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(244, 114, 248, 0.18);
+}
+
+.mod-header strong {
+  display: block;
+  color: #fbeeff;
+  font-size: 15px;
+}
+
+.mod-header span {
+  color: #baa9d8;
+  font-size: 12px;
+}
+
+.mod-header button {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.07);
+  color: #d9caee;
+  cursor: pointer;
+}
+
+.mod-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+}
+
+.mod-tabs button {
+  border: 1px solid rgba(90, 67, 147, 0.65);
+  background: rgba(255, 255, 255, 0.03);
+  color: #c9b5e5;
+  border-radius: 10px;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.mod-tabs button.active {
+  color: #fff;
+  border-color: rgba(244, 114, 248, 0.6);
+  background: linear-gradient(120deg, rgba(217, 70, 239, 0.32), rgba(251, 113, 133, 0.22));
+}
+
+.mod-search-wrap {
+  padding: 0 12px 8px;
+}
+
+.mod-search {
+  width: 100%;
+  border: 1px solid rgba(90, 67, 147, 0.62);
+  background: rgba(255, 255, 255, 0.04);
+  color: #f2e7ff;
+  border-radius: 10px;
+  padding: 9px 10px;
+  font-size: 12px;
+}
+
+.mod-search:focus {
+  outline: none;
+  border-color: rgba(244, 114, 248, 0.65);
+}
+
+.mod-error {
+  margin: 0 12px 8px;
+  background: rgba(255, 76, 76, 0.14);
+  border: 1px solid rgba(255, 76, 76, 0.3);
+  color: #ffc2cf;
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+.mod-content {
+  overflow-y: auto;
+  padding: 6px 12px 12px;
+}
+
+.mod-empty {
+  text-align: center;
+  color: #baa9d8;
+  margin-top: 28px;
+}
+
+.mod-users-list,
+.mod-audit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mod-user-row,
+.mod-audit-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(90, 67, 147, 0.58);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.mod-user-main strong {
+  display: block;
+  color: #fff1ff;
+  font-size: 13px;
+}
+
+.mod-user-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mod-user-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.08);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #f4e9ff;
+  flex-shrink: 0;
+}
+
+.mod-user-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.mod-user-avatar-placeholder {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.mod-user-main span {
+  display: block;
+  color: #baa9d8;
+  font-size: 11px;
+}
+
+.mod-user-tags {
+  margin-top: 5px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.mod-user-tags i {
+  font-style: normal;
+  font-size: 10px;
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  color: #cfbce9;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mod-user-tags i.verified {
+  color: #8fe9ff;
+}
+
+.mod-user-tags i.online {
+  color: #8fe9ff;
+  border-color: rgba(34, 211, 238, 0.35);
+  background: rgba(34, 211, 238, 0.12);
+}
+
+.mod-user-tags i.offline {
+  color: #cdb7e6;
+}
+
+.mod-user-tags i.banned {
+  color: #ffc1cf;
+}
+
+.mod-user-actions {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.mod-user-actions button {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid rgba(90, 67, 147, 0.58);
+  background: rgba(255, 255, 255, 0.06);
+  color: #e9ddf8;
+  cursor: pointer;
+}
+
+.mod-user-actions button:hover {
+  border-color: rgba(244, 114, 248, 0.5);
+}
+
+.mod-audit-row {
+  flex-direction: column;
+}
+
+.mod-audit-row .line-1 {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  color: #f3e9ff;
+  font-size: 12px;
+}
+
+.mod-audit-row .line-2 time {
+  color: #bca9d9;
+  font-size: 11px;
+}
+
+.mod-user-profile {
+  border-top: 1px solid rgba(244, 114, 248, 0.2);
+  padding: 10px 12px 12px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.mod-user-profile-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.mod-user-profile-header strong {
+  color: #f6eeff;
+  font-size: 13px;
+}
+
+.mod-user-profile-header button {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: none;
+  background: rgba(255, 255, 255, 0.07);
+  color: #d8caee;
+  cursor: pointer;
+}
+
+.mod-user-profile-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.mod-user-profile-grid div {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #d3c3ea;
+  font-size: 12px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(90, 67, 147, 0.44);
+}
+
+.mod-user-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #d3c3ea;
+  font-size: 12px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(90, 67, 147, 0.44);
+}
+
+.mod-user-status span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mod-user-status span.online {
+  color: #8fe9ff;
+}
+
+.mod-user-status span.offline {
+  color: #cdb7e6;
+}
+
+.mod-user-status .status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #22d3ee;
+  box-shadow: 0 0 8px rgba(34, 211, 238, 0.8);
+}
+
+.mod-user-status span.offline .status-dot {
+  background: #8a7aa8;
+  box-shadow: none;
+}
+
+.mod-danger-btn {
+  margin-top: 10px;
+  border: 1px solid rgba(255, 94, 129, 0.55);
+  background: rgba(255, 94, 129, 0.14);
+  color: #ffc9d8;
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+@media (max-width: 768px) {
+  .mod-panel {
+    right: 12px;
+    bottom: 74px;
+    width: calc(100vw - 24px);
+    height: min(76vh, 640px);
+  }
+
+  .mod-user-profile-grid {
+    grid-template-columns: 1fr;
+  }
+}

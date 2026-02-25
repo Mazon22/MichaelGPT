@@ -1,0 +1,232 @@
+﻿.gc-profile-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 292;
+}
+
+.gc-profile-modal {
+  position: fixed;
+  right: 30px;
+  bottom: 90px;
+  width: min(360px, calc(100vw - 24px));
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 18% 12%, rgba(244, 114, 248, 0.16) 0%, transparent 38%),
+    radial-gradient(circle at 86% 10%, rgba(34, 211, 238, 0.11) 0%, transparent 32%),
+    linear-gradient(165deg, rgba(24, 14, 52, 0.98), rgba(10, 8, 30, 0.98));
+  border: 1px solid rgba(244, 114, 248, 0.35);
+  box-shadow: 0 26px 60px rgba(0, 0, 0, 0.48);
+  z-index: 293;
+  padding: 18px 16px 14px;
+}
+
+.gc-profile-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #d6c6ec;
+  cursor: pointer;
+}
+
+.gc-profile-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.gc-profile-avatar-wrap {
+  position: relative;
+}
+
+.gc-profile-avatar {
+  width: 62px;
+  height: 62px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: linear-gradient(135deg, #d946ef, #fb7185);
+  box-shadow: 0 0 24px rgba(217, 70, 239, 0.4);
+  overflow: hidden;
+}
+
+.gc-profile-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.gc-profile-name-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.gc-profile-name-row h4 {
+  margin: 0;
+  color: #fff1ff;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.gc-profile-date {
+  margin: 0;
+  color: #bca9d8;
+  font-size: 12px;
+}
+
+.gc-profile-status {
+  margin: 0;
+  font-size: 12px;
+}
+
+.gc-status-online,
+.gc-status-offline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(90, 67, 147, 0.48);
+  background: rgba(255, 255, 255, 0.04);
+  color: #d7c8ec;
+}
+
+.gc-status-online {
+  color: #8fe9ff;
+  border-color: rgba(34, 211, 238, 0.35);
+  background: rgba(34, 211, 238, 0.12);
+}
+
+.gc-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #22d3ee;
+  box-shadow: 0 0 8px rgba(34, 211, 238, 0.8);
+}
+
+.gc-role {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 9px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.gc-role.owner {
+  background: rgba(255, 215, 0, 0.18);
+  border: 1px solid rgba(255, 215, 0, 0.35);
+  color: #ffe08a;
+}
+
+.gc-role.moderator {
+  background: rgba(34, 211, 238, 0.16);
+  border: 1px solid rgba(34, 211, 238, 0.35);
+  color: #8fe9ff;
+}
+
+.gc-role.user {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #d2c2ea;
+}
+
+.gc-verified {
+  color: #8fe9ff;
+  display: inline-flex;
+}
+
+.gc-profile-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.gc-rank-pill,
+.gc-level-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #eadff8;
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(90, 67, 147, 0.52);
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+
+.gc-progress-track {
+  height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  border: 1px solid rgba(90, 67, 147, 0.48);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.gc-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(217, 70, 239, 0.95), rgba(34, 211, 238, 0.95));
+  box-shadow: 0 0 10px rgba(217, 70, 239, 0.45);
+}
+
+.gc-next-level {
+  color: #cdb7e8;
+  font-size: 11px;
+  text-align: right;
+  padding: 0 2px 2px;
+}
+
+.gc-profile-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.gc-stat-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: 1px solid rgba(90, 67, 147, 0.5);
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 10px;
+  padding: 10px 6px;
+  color: #d8c8ed;
+  text-align: center;
+}
+
+.gc-stat-card b {
+  font-size: 14px;
+  color: #fff1ff;
+}
+
+.gc-stat-card span {
+  font-size: 10px;
+}
+
+@media (max-width: 768px) {
+  .gc-profile-modal {
+    right: 12px;
+    bottom: 84px;
+    width: calc(100vw - 24px);
+  }
+}
