@@ -1,6 +1,6 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Sparkles, Bug, Palette, Zap, Star } from 'lucide-react';
+import { X, Sparkles, Bug, Palette, Zap, Star, EyeOff, Eye } from 'lucide-react';
 
 const UPDATES = [
   {
@@ -15,13 +15,31 @@ const UPDATES = [
 ];
 
 const STORAGE_KEY = 'michaelgpt_last_update_seen';
+const STORAGE_DISABLE_KEY = 'michaelgpt_disable_updates';
 
 export default function UpdateModal({ isOpen, onClose }) {
+  const [disableUpdates, setDisableUpdates] = useState(false);
+
+  useEffect(() => {
+    const isDisabled = localStorage.getItem(STORAGE_DISABLE_KEY);
+    setDisableUpdates(Boolean(isDisabled));
+  }, []);
+
   useEffect(() => {
     if (isOpen) {
       localStorage.setItem(STORAGE_KEY, new Date().toISOString());
     }
   }, [isOpen]);
+
+  const handleToggleDisable = () => {
+    const newValue = !disableUpdates;
+    setDisableUpdates(newValue);
+    if (newValue) {
+      localStorage.setItem(STORAGE_DISABLE_KEY, 'true');
+    } else {
+      localStorage.removeItem(STORAGE_DISABLE_KEY);
+    }
+  };
 
   const latestUpdate = UPDATES[0];
 
@@ -79,6 +97,20 @@ export default function UpdateModal({ isOpen, onClose }) {
                 <Star size={16} />
                 <span>Хорошего времяпрепровождения на сайте!</span>
               </div>
+
+              <button className="update-modal-toggle" onClick={handleToggleDisable}>
+                {disableUpdates ? (
+                  <>
+                    <Eye size={16} />
+                    <span>Включить уведомления об обновлениях</span>
+                  </>
+                ) : (
+                  <>
+                    <EyeOff size={16} />
+                    <span>Больше не показывать</span>
+                  </>
+                )}
+              </button>
             </div>
           </motion.div>
           </motion.div>

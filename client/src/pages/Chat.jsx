@@ -264,16 +264,18 @@ export default function Chat() {
 
   const openUpdateModal = () => {
     setUpdateModalOpen(true);
-    localStorage.setItem('michaelgpt_last_update_seen', new Date().toISOString());
   };
 
   useEffect(() => {
-    const lastSeen = localStorage.getItem('michaelgpt_last_update_seen');
-    if (!lastSeen) {
-      setTimeout(() => {
-        setUpdateModalOpen(true);
-        localStorage.setItem('michaelgpt_last_update_seen', new Date().toISOString());
-      }, 800);
+    const isDisabled = localStorage.getItem('michaelgpt_disable_updates');
+    if (!isDisabled) {
+      const lastSeen = localStorage.getItem('michaelgpt_last_update_seen');
+      if (!lastSeen) {
+        setTimeout(() => {
+          setUpdateModalOpen(true);
+          localStorage.setItem('michaelgpt_last_update_seen', new Date().toISOString());
+        }, 800);
+      }
     }
   }, []);
 
