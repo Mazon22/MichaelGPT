@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Cropper from 'react-easy-crop';
-import { X, User, Zap, MessageSquare, Globe, Calendar, BadgeCheck } from 'lucide-react';
+import { X, User, Zap, MessageSquare, Globe, Calendar, BadgeCheck, Sparkles } from 'lucide-react';
 import api from '../utils/api';
 
 const RANK_NAMES = [
@@ -455,6 +455,18 @@ export default function ProfileModal({ isOpen, onClose, user, stats, isLoading, 
                   </div>
                 </div>
 
+                <div className="profile-update-badge">
+                  <Sparkles size={16} className="profile-update-icon" />
+                  <div className="profile-update-content">
+                    <span className="profile-update-title">Обновление 26.02.2026</span>
+                    <ul className="profile-update-list">
+                      <li>✅ Исправлен баг: опыт теперь сохраняется после удаления чатов</li>
+                      <li>🎨 Обновлён профиль: компактный вид с основной статистикой</li>
+                    </ul>
+                    <span className="profile-update-footer">Хорошего времяпрепровождения на сайте!</span>
+                  </div>
+                </div>
+
                 <div className="profile-stats-grid">
                   <div className="profile-stat-card">
                     <MessageSquare size={20} color="var(--primary-light)" />
@@ -465,13 +477,6 @@ export default function ProfileModal({ isOpen, onClose, user, stats, isLoading, 
                     <Globe size={20} color={rankColor} />
                     <span className="profile-stat-value">#{stats?.worldRank ?? '—'}</span>
                     <span className="profile-stat-label">в мире</span>
-                  </div>
-                  <div className="profile-stat-card">
-                    <Calendar size={20} color="#f59e0b" />
-                    <span className="profile-stat-value profile-stat-date">
-                      {memberSinceLabel}
-                    </span>
-                    <span className="profile-stat-label">С нами с</span>
                   </div>
                 </div>
               </>
