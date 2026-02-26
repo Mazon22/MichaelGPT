@@ -136,7 +136,7 @@ export default function GlobalChatWidget({ user }) {
     // Ждём рендер сообщений и скроллим вниз
     setTimeout(() => {
       container.scrollTo({ top: container.scrollHeight, behavior: 'auto' });
-    }, 50);
+    }, 100);
   }, [isOpen]);
 
   // Прокрутка вниз при новых сообщениях (только если пользователь внизу)
