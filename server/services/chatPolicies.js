@@ -32,13 +32,12 @@ async function getAiQuota(db, userId, user) {
 
   const usage = await db.get(
     `SELECT
-       COUNT(m.id) AS used,
-       MIN(m.created_at) AS oldestInWindow
-     FROM chats c
-     JOIN messages m ON m.chat_id = c.id
-     WHERE c.user_id = ?
-       AND m.role = 'user'
-       AND m.created_at >= datetime('now', '-24 hours')`,
+       COUNT(*) AS used,
+       MIN(created_at) AS oldestInWindow
+     FROM user_xp_logs
+     WHERE user_id = ?
+       AND source = 'message'
+       AND created_at >= datetime('now', '-24 hours')`,
     [userId]
   );
 

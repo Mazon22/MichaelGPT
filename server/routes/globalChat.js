@@ -94,12 +94,13 @@ function createGlobalChatRouter(db, authMiddleware) {
       const stats = await db.get(
         `SELECT
            (SELECT COUNT(*) FROM global_messages gm WHERE gm.user_id = ?) AS globalMessages,
-           (SELECT COUNT(*) FROM chats c JOIN messages m ON m.chat_id = c.id AND m.role = 'user' WHERE c.user_id = ?) AS totalMessages`,
-        [userId, userId]
+           (SELECT SUM(xp_amount) FROM user_xp_logs WHERE user_id = ? AND source = 'message') AS totalXp,
+           (SELECT COUNT(*) FROM user_xp_logs WHERE user_id = ? AND source = 'message') AS totalMessages`,
+        [userId, userId, userId]
       );
 
       const totalMessages = stats?.totalMessages || 0;
-      const xp = totalMessages * 15;
+      const xp = stats?.totalXp || 0;
       const level = Math.min(Math.floor(xp / 150) + 1, 100);
       const xpForCurrentLevel = (level - 1) * 150;
       const xpProgress = xp - xpForCurrentLevel;
@@ -134,10 +135,10 @@ function createGlobalChatRouter(db, authMiddleware) {
       const rankRow = await db.get(
         `SELECT COUNT(*) + 1 AS worldRank
          FROM (
-           SELECT c2.user_id, COUNT(m2.id) * 15 AS userXp
-           FROM chats c2
-           JOIN messages m2 ON m2.chat_id = c2.id AND m2.role = 'user'
-           GROUP BY c2.user_id
+           SELECT user_id, SUM(xp_amount) AS userXp
+           FROM user_xp_logs
+           WHERE source = 'message'
+           GROUP BY user_id
          ) AS leaderboard
          WHERE leaderboard.userXp > ?`,
         [xp]

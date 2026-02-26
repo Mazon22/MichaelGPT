@@ -462,6 +462,13 @@ app.post(
     ]);
     const userMessage = await db.get('SELECT * FROM messages WHERE id = ?', [userInsert.lastID]);
 
+    // Начисляем XP пользователю за сообщение
+    await db.run('INSERT INTO user_xp_logs (user_id, xp_amount, source) VALUES (?, ?, ?)', [
+      req.user.id,
+      15,
+      'message',
+    ]);
+
     const history = await db.all(
       'SELECT role, content FROM messages WHERE chat_id = ? ORDER BY created_at ASC',
       [chatId]
@@ -545,17 +552,15 @@ app.get(
 
     const row = await db.get(
       `SELECT
-         COUNT(m.id) AS totalMessages,
-         u.created_at AS memberSince
-       FROM users u
-       LEFT JOIN chats c ON c.user_id = u.id
-       LEFT JOIN messages m ON m.chat_id = c.id AND m.role = 'user'
-       WHERE u.id = ?`,
+         SUM(xp_amount) AS totalXp,
+         COUNT(*) AS totalMessages
+       FROM user_xp_logs
+       WHERE user_id = ? AND source = 'message'`,
       [userId]
     );
 
     const totalMessages = row?.totalMessages || 0;
-    const xp = totalMessages * 15;
+    const xp = row?.totalXp || 0;
     const level = Math.min(Math.floor(xp / 150) + 1, 100);
 
     const ranks = {
@@ -592,10 +597,10 @@ app.get(
     const rankRow = await db.get(
       `SELECT COUNT(*) + 1 AS worldRank
        FROM (
-         SELECT c2.user_id, COUNT(m2.id) * 15 AS userXp
-         FROM chats c2
-         JOIN messages m2 ON m2.chat_id = c2.id AND m2.role = 'user'
-         GROUP BY c2.user_id
+         SELECT user_id, SUM(xp_amount) AS userXp
+         FROM user_xp_logs
+         WHERE source = 'message'
+         GROUP BY user_id
        ) AS leaderboard
        WHERE leaderboard.userXp > ?`,
       [xp]

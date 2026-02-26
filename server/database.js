@@ -82,6 +82,15 @@ async function initDatabase() {
       FOREIGN KEY (chat_id) REFERENCES chats(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS user_xp_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      xp_amount INTEGER NOT NULL DEFAULT 15,
+      source TEXT NOT NULL DEFAULT 'message',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS global_messages (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL,
@@ -124,6 +133,7 @@ async function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_user_bans_active ON user_bans(user_id, revoked_at);
     CREATE INDEX IF NOT EXISTS idx_moderator_audit_actor ON moderator_audit_logs(actor_id);
     CREATE INDEX IF NOT EXISTS idx_moderator_audit_created ON moderator_audit_logs(created_at);
+    CREATE INDEX IF NOT EXISTS idx_user_xp_logs_user_id ON user_xp_logs(user_id);
   `);
 
   await safeExec(`ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user';`);
