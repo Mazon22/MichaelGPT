@@ -263,19 +263,31 @@ export default function Chat() {
   };
 
   const openUpdateModal = () => {
+    console.log('UpdateModal: opening manually');
     setUpdateModalOpen(true);
   };
 
   useEffect(() => {
     const isDisabled = localStorage.getItem('michaelgpt_disable_updates');
+    console.log('UpdateModal: isDisabled =', isDisabled);
     if (!isDisabled) {
       const lastSeen = localStorage.getItem('michaelgpt_last_update_seen');
+      console.log('UpdateModal: lastSeen =', lastSeen);
       if (!lastSeen) {
+        console.log('UpdateModal: first visit, showing modal');
         setTimeout(() => {
           setUpdateModalOpen(true);
           localStorage.setItem('michaelgpt_last_update_seen', new Date().toISOString());
-        }, 800);
+          console.log('UpdateModal: modal opened');
+        }, 1000);
+      } else {
+        console.log('UpdateModal: not first visit, showing modal anyway');
+        setTimeout(() => {
+          setUpdateModalOpen(true);
+        }, 1000);
       }
+    } else {
+      console.log('UpdateModal: updates disabled by user');
     }
   }, []);
 
