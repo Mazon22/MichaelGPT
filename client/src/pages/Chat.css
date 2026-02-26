@@ -1288,63 +1288,6 @@
   color: var(--text-muted);
 }
 
-.profile-update-badge {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(168, 85, 247, 0.1));
-  border: 1px solid rgba(99, 102, 241, 0.3);
-  border-radius: 12px;
-  padding: 12px;
-  margin-bottom: 10px;
-}
-
-.profile-update-icon {
-  color: #a78bfa;
-  flex-shrink: 0;
-  animation: profile-glow 2s ease-in-out infinite;
-}
-
-@keyframes profile-glow {
-  0%, 100% { opacity: 1; filter: drop-shadow(0 0 4px rgba(167, 139, 250, 0.5)); }
-  50% { opacity: 0.7; filter: drop-shadow(0 0 8px rgba(167, 139, 250, 0.8)); }
-}
-
-.profile-update-content {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.profile-update-title {
-  font-size: 12px;
-  font-weight: 700;
-  color: #a78bfa;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.profile-update-list {
-  margin: 0;
-  padding: 0 0 0 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.profile-update-list li {
-  font-size: 11px;
-  color: var(--text-secondary);
-  line-height: 1.4;
-}
-
-.profile-update-footer {
-  font-size: 10px;
-  color: var(--text-muted);
-  font-style: italic;
-  margin-top: 2px;
-}
-
 .profile-modal-loading {
   display: flex;
   flex-direction: column;
@@ -1631,5 +1574,152 @@
 @keyframes welcomeFloat {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-8px); }
+}
+
+/* Update Modal */
+.update-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+}
+
+.update-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 24px;
+  max-width: 480px;
+  width: 90%;
+  z-index: 1001;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+}
+
+.update-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.update-modal-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.update-modal-icon {
+  color: #a78bfa;
+  animation: update-glow 2s ease-in-out infinite;
+}
+
+@keyframes update-glow {
+  0%, 100% { opacity: 1; filter: drop-shadow(0 0 6px rgba(167, 139, 250, 0.6)); }
+  50% { opacity: 0.7; filter: drop-shadow(0 0 12px rgba(167, 139, 250, 0.9)); }
+}
+
+.update-modal-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.update-modal-close {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.update-modal-close:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+}
+
+.update-modal-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.update-item {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.update-item-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.update-item-icon {
+  color: #a78bfa;
+  flex-shrink: 0;
+}
+
+.update-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.update-item-date {
+  font-size: 11px;
+  color: #a78bfa;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+.update-item-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.update-item-list {
+  margin: 0;
+  padding: 0 0 0 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.update-item-list li {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.update-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-style: italic;
+}
+
+.update-modal-footer svg {
+  color: #fbbf24;
 }
 

@@ -20,9 +20,11 @@ import {
   MoreVertical,
   ChevronDown,
   X,
+  Bell,
 } from 'lucide-react';
 import './Chat.css';
 import ProfileModal from './ProfileModal';
+import UpdateModal from './UpdateModal';
 import GlobalChatWidget from '../components/GlobalChatWidget';
 
 function formatMessageTime(value) {
@@ -152,6 +154,7 @@ export default function Chat() {
   const [copiedCodeKey, setCopiedCodeKey] = useState(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [updateModalOpen, setUpdateModalOpen] = useState(false);
   const [profileStats, setProfileStats] = useState(null);
   const [profileStatsLoading, setProfileStatsLoading] = useState(false);
   const [responseMode, setResponseMode] = useState('balanced');
@@ -258,6 +261,19 @@ export default function Chat() {
       setProfileStatsLoading(false);
     }
   };
+
+  const openUpdateModal = () => {
+    setUpdateModalOpen(true);
+    localStorage.setItem('michaelgpt_last_update_seen', new Date().toISOString());
+  };
+
+  useEffect(() => {
+    const lastSeen = localStorage.getItem('michaelgpt_last_update_seen');
+    if (!lastSeen) {
+      setUpdateModalOpen(true);
+      localStorage.setItem('michaelgpt_last_update_seen', new Date().toISOString());
+    }
+  }, []);
 
   const loadAiQuota = async () => {
     try {
@@ -685,6 +701,10 @@ export default function Chat() {
                         exit={{ opacity: 0, y: 10 }}
                         className="user-menu-dropdown"
                       >
+                        <button className="dropdown-item" onClick={openUpdateModal}>
+                          <Bell size={16} />
+                          Обновления
+                        </button>
                         <button className="dropdown-item" onClick={logout}>
                           <LogOut size={16} />
                           Выйти
@@ -866,6 +886,11 @@ export default function Chat() {
         isLoading={profileStatsLoading}
         modalRef={profileModalRef}
         updateUser={updateUser}
+      />
+
+      <UpdateModal
+        isOpen={updateModalOpen}
+        onClose={() => setUpdateModalOpen(false)}
       />
 
       <GlobalChatWidget user={user} />
