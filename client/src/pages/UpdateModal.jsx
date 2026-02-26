@@ -37,16 +37,16 @@ export default function UpdateModal({ isOpen, onClose }) {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
             onClick={onClose}
-          />
-          <motion.div
-            key="update-modal"
-            className="update-modal"
-            initial={{ opacity: 0, scale: 0.92, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.92, y: 20 }}
-            transition={{ type: 'spring', damping: 22, stiffness: 300 }}
-            onClick={(e) => e.stopPropagation()}
           >
+            <motion.div
+              key="update-modal"
+              className="update-modal"
+              initial={{ opacity: 0, scale: 0.92, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.92, y: 20 }}
+              transition={{ type: 'spring', damping: 22, stiffness: 300 }}
+              onClick={(e) => e.stopPropagation()}
+            >
             <div className="update-modal-header">
               <div className="update-modal-title-row">
                 <Sparkles size={24} className="update-modal-icon" />
@@ -80,6 +80,7 @@ export default function UpdateModal({ isOpen, onClose }) {
                 <span>Хорошего времяпрепровождения на сайте!</span>
               </div>
             </div>
+          </motion.div>
           </motion.div>
         </>
       )}
