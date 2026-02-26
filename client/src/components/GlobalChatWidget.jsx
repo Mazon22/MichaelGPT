@@ -129,6 +129,17 @@ export default function GlobalChatWidget({ user }) {
     return () => clearInterval(timer);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Прокрутка вниз при открытии чата
+  useEffect(() => {
+    if (!isOpen || !listRef.current) return;
+    const container = listRef.current;
+    // Ждём рендер сообщений и скроллим вниз
+    setTimeout(() => {
+      container.scrollTo({ top: container.scrollHeight, behavior: 'auto' });
+    }, 50);
+  }, [isOpen]);
+
+  // Прокрутка вниз при новых сообщениях (только если пользователь внизу)
   useEffect(() => {
     if (!isOpen || !listRef.current) return;
     const container = listRef.current;
@@ -136,7 +147,7 @@ export default function GlobalChatWidget({ user }) {
     if (isAtBottom) {
       container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
     }
-  }, [messages, isOpen]);
+  }, [messages]);
 
   useEffect(() => {
     if (!isOpen) return undefined;
