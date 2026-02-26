@@ -270,8 +270,10 @@ export default function Chat() {
   useEffect(() => {
     const lastSeen = localStorage.getItem('michaelgpt_last_update_seen');
     if (!lastSeen) {
-      setUpdateModalOpen(true);
-      localStorage.setItem('michaelgpt_last_update_seen', new Date().toISOString());
+      setTimeout(() => {
+        setUpdateModalOpen(true);
+        localStorage.setItem('michaelgpt_last_update_seen', new Date().toISOString());
+      }, 800);
     }
   }, []);
 

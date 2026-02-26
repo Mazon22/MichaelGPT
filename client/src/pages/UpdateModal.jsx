@@ -45,6 +45,7 @@ export default function UpdateModal({ isOpen, onClose }) {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.92, y: 20 }}
             transition={{ type: 'spring', damping: 22, stiffness: 300 }}
+            onClick={(e) => e.stopPropagation()}
           >
             <div className="update-modal-header">
               <div className="update-modal-title-row">
