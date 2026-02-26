@@ -135,9 +135,7 @@ export default function GlobalChatWidget({ user }) {
     const container = listRef.current;
     // Ждём рендер сообщений и скроллим вниз
     setTimeout(() => {
-      console.log('Scrolling to bottom:', container.scrollHeight);
       container.scrollTo({ top: container.scrollHeight, behavior: 'auto' });
-      console.log('Scroll top after:', container.scrollTop);
     }, 200);
   }, [isOpen]);
 
