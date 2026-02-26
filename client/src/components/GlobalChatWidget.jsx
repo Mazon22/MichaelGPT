@@ -130,8 +130,12 @@ export default function GlobalChatWidget({ user }) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!isOpen) return;
-    listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' });
+    if (!isOpen || !listRef.current) return;
+    const container = listRef.current;
+    const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 50;
+    if (isAtBottom) {
+      container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+    }
   }, [messages, isOpen]);
 
   useEffect(() => {
