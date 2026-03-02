@@ -34,12 +34,14 @@ function formatMessageTime(value) {
   return new Date(normalized).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
 }
 
-const Message = memo(function Message({ message, index, copiedId, copyMessage, copiedCodeKey, copyCode, currentUser }) {
+const Message = memo(function Message({ message, index, copiedId, copyMessage, copiedCodeKey, copyCode, currentUser, streamingContent }) {
+  const displayContent = streamingContent !== undefined ? streamingContent : message.content;
+  
   return (
     <motion.div
-      initial={{ opacity: 0, y: message.role === 'assistant' ? 8 : 0 }}
+      initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.12 }}
+      transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
       className={`message ${message.role}`}
     >
       <div className="message-avatar">
@@ -74,7 +76,7 @@ const Message = memo(function Message({ message, index, copiedId, copyMessage, c
                   const match = /language-(\w+)/.exec(className || '');
                   const code = String(children).replace(/\n$/, '');
                   const codeKey = `${message.id}-${index}`;
-                  
+
                   if (!inline && match) {
                     return (
                       <div className="code-block-wrapper">
@@ -116,25 +118,27 @@ const Message = memo(function Message({ message, index, copiedId, copyMessage, c
                 }
               }}
             >
-              {message.content}
+              {displayContent}
             </ReactMarkdown>
           ) : (
-            message.content
+            displayContent
           )}
         </div>
-        <div className="message-actions">
-          <button
-            className="message-action-btn"
-            onClick={() => copyMessage(message.content, message.id)}
-          >
-            {copiedId === message.id ? (
-              <Check size={14} color="var(--success)" />
-            ) : (
-              <Copy size={14} />
-            )}
-            {copiedId === message.id ? 'Скопировано' : 'Копировать'}
-          </button>
-        </div>
+        {streamingContent === undefined && (
+          <div className="message-actions">
+            <button
+              className="message-action-btn"
+              onClick={() => copyMessage(message.content, message.id)}
+            >
+              {copiedId === message.id ? (
+                <Check size={14} color="var(--success)" />
+              ) : (
+                <Copy size={14} />
+              )}
+              {copiedId === message.id ? 'Скопировано' : 'Копировать'}
+            </button>
+          </div>
+        )}
       </div>
     </motion.div>
   );
@@ -161,6 +165,7 @@ export default function Chat() {
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const [aiQuota, setAiQuota] = useState(null);
   const [quotaNowMs, setQuotaNowMs] = useState(Date.now());
+  const [streamingMessage, setStreamingMessage] = useState(null);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const userMenuRef = useRef(null);
@@ -447,14 +452,35 @@ export default function Chat() {
         responseMode,
       });
 
+      const aiMessage = data.aiMessage;
+      
       setMessages((prev) => {
         const replaced = prev.map((m) =>
           m.localId === localId ? { ...data.userMessage, localId, isPending: false } : m
         );
-        const hasAiMessage = replaced.some((m) => m.id === data.aiMessage.id);
+        const hasAiMessage = replaced.some((m) => m.id === aiMessage.id);
         if (hasAiMessage) return replaced;
-        return [...replaced, data.aiMessage];
+        return [...replaced, { ...aiMessage, isStreaming: true }];
       });
+
+      const fullContent = aiMessage.content;
+      let currentContent = '';
+      const words = fullContent.split(/(?=\s+)/);
+      
+      setStreamingMessage({ id: aiMessage.id, content: '' });
+      
+      for (let i = 0; i < words.length; i++) {
+        await new Promise(resolve => setTimeout(resolve, 8 + Math.random() * 12));
+        currentContent += words[i];
+        setStreamingMessage({ id: aiMessage.id, content: currentContent });
+      }
+      
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === aiMessage.id ? { ...m, isStreaming: false } : m
+        )
+      );
+      setStreamingMessage(null);
 
       if (wasFirstMessage) {
         const newTitle = content.slice(0, 30) + (content.length > 30 ? '...' : '');
@@ -548,19 +574,25 @@ export default function Chat() {
       : 0;
   const renderedMessages = useMemo(
     () =>
-      msgs.map((message, index) => (
-        <Message
-          key={message.id}
-          message={message}
-          index={index}
-          copiedId={copiedId}
-          copyMessage={copyMessage}
-          copiedCodeKey={copiedCodeKey}
-          copyCode={copyCode}
-          currentUser={user}
-        />
-      )),
-    [msgs, copiedId, copyMessage, copiedCodeKey, copyCode]
+      msgs.map((message, index) => {
+        const isLastAiMessage = streamingMessage && message.id === streamingMessage.id;
+        const streamingContent = isLastAiMessage ? streamingMessage.content : undefined;
+        
+        return (
+          <Message
+            key={message.id}
+            message={message}
+            index={index}
+            copiedId={copiedId}
+            copyMessage={copyMessage}
+            copiedCodeKey={copiedCodeKey}
+            copyCode={copyCode}
+            currentUser={user}
+            streamingContent={streamingContent}
+          />
+        );
+      }),
+    [msgs, copiedId, copyMessage, copiedCodeKey, copyCode, streamingMessage]
   );
   const modeOptions = [
     { value: 'balanced', label: 'Стандарт' },
@@ -785,7 +817,7 @@ export default function Chat() {
           ) : (
             <>
               {renderedMessages}
-              {isLoading && (
+              {isLoading && !streamingMessage && (
                 <motion.div
                   initial={{ opacity: 0, y: 0 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -797,10 +829,8 @@ export default function Chat() {
                     </div>
                   </div>
                   <div className="message-content">
-                    <div className="typing-indicator">
-                      <span></span>
-                      <span></span>
-                      <span></span>
+                    <div className="message-text">
+                      <span>Печатает...</span>
                     </div>
                   </div>
                 </motion.div>
