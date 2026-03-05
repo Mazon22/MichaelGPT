@@ -98,4 +98,4 @@ GROQ API ключ уже настроен в файле `server/.env`.
 
 ---
 
-**MichaelGPT** © 2024
+**MichaelGPT** © 2026
