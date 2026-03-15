@@ -344,6 +344,150 @@
   cursor: pointer;
 }
 
+.mod-storage-view {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mod-storage-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.mod-storage-card {
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(90, 67, 147, 0.58);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.mod-storage-card strong {
+  display: block;
+  margin-top: 6px;
+  color: #fff1ff;
+  font-size: 16px;
+}
+
+.mod-storage-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #baa9d8;
+  font-size: 12px;
+}
+
+.mod-storage-bars {
+  display: grid;
+  gap: 10px;
+}
+
+.mod-storage-bar-card {
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(90, 67, 147, 0.58);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.mod-storage-bar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  color: #d9ccee;
+  font-size: 12px;
+}
+
+.mod-storage-bar-head b {
+  color: #fff1ff;
+}
+
+.mod-storage-bar-track {
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.mod-storage-bar-fill {
+  height: 100%;
+  border-radius: inherit;
+}
+
+.mod-storage-bar-fill.system {
+  background: linear-gradient(90deg, #fb7185, #f59e0b);
+}
+
+.mod-storage-bar-fill.app {
+  background: linear-gradient(90deg, #22d3ee, #d946ef);
+}
+
+.mod-storage-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mod-storage-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(90, 67, 147, 0.58);
+  background: rgba(255, 255, 255, 0.03);
+  color: #d9ccee;
+  font-size: 12px;
+}
+
+.mod-storage-row strong {
+  color: #fff1ff;
+}
+
+.mod-storage-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mod-storage-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(90, 67, 147, 0.62);
+  background: rgba(255, 255, 255, 0.05);
+  color: #f1e5ff;
+  border-radius: 10px;
+  padding: 9px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.mod-storage-btn:hover:not(:disabled) {
+  border-color: rgba(244, 114, 248, 0.55);
+}
+
+.mod-storage-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.mod-storage-btn.danger {
+  border-color: rgba(255, 94, 129, 0.5);
+  background: rgba(255, 94, 129, 0.14);
+  color: #ffd0db;
+}
+
+.mod-storage-note {
+  margin: 0;
+  color: #bca9d9;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 @media (max-width: 768px) {
   .mod-panel {
     right: 12px;
@@ -353,6 +497,10 @@
   }
 
   .mod-user-profile-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mod-storage-summary {
     grid-template-columns: 1fr;
   }
 }

@@ -1,6 +1,18 @@
 const express = require('express');
+const fs = require('fs/promises');
+const path = require('path');
+const { execFile } = require('child_process');
+const { promisify } = require('util');
 const { requireRole } = require('../middleware/roles');
 const { isOnlineByMs } = require('../services/onlineStatus');
+
+const execFileAsync = promisify(execFile);
+const SERVER_ROOT = path.join(__dirname, '..');
+const REPO_ROOT = path.join(SERVER_ROOT, '..');
+const CLIENT_ROOT = path.join(REPO_ROOT, 'client');
+const TEMP_UPLOADS_DIR = path.join(SERVER_ROOT, '.tmp_uploads');
+const DATABASE_FILE = path.join(SERVER_ROOT, 'michaelgpt.db');
+const STORAGE_FALLBACK_TOTAL_BYTES = Number(process.env.STORAGE_LIMIT_GB || 20) * 1024 * 1024 * 1024;
 
 function canModerate(role) {
   return role === 'moderator' || role === 'owner';
@@ -10,6 +22,118 @@ function parseBool(value) {
   if (value === true || value === 'true' || value === 1 || value === '1') return true;
   if (value === false || value === 'false' || value === 0 || value === '0') return false;
   return null;
+}
+
+async function getDirectorySizeFallback(targetPath) {
+  try {
+    const stats = await fs.stat(targetPath);
+    if (stats.isFile()) return stats.size;
+    if (!stats.isDirectory()) return 0;
+
+    const entries = await fs.readdir(targetPath, { withFileTypes: true });
+    const nestedSizes = await Promise.all(
+      entries.map(async (entry) => {
+        const entryPath = path.join(targetPath, entry.name);
+        if (entry.isDirectory()) return getDirectorySizeFallback(entryPath);
+        if (entry.isFile()) {
+          const fileStats = await fs.stat(entryPath);
+          return fileStats.size;
+        }
+        return 0;
+      })
+    );
+
+    return nestedSizes.reduce((sum, value) => sum + value, 0);
+  } catch (_error) {
+    return 0;
+  }
+}
+
+async function getPathSize(targetPath) {
+  try {
+    const { stdout } = await execFileAsync('du', ['-sb', targetPath], { windowsHide: true });
+    const value = Number.parseInt(String(stdout || '').trim().split(/\s+/)[0], 10);
+    return Number.isFinite(value) ? value : 0;
+  } catch (_error) {
+    return getDirectorySizeFallback(targetPath);
+  }
+}
+
+async function getFilesystemUsage(targetPath) {
+  try {
+    const { stdout } = await execFileAsync('df', ['-k', targetPath], { windowsHide: true });
+    const lines = String(stdout || '').trim().split(/\r?\n/);
+    const dataLine = lines[lines.length - 1] || '';
+    const parts = dataLine.trim().split(/\s+/);
+
+    if (parts.length >= 6) {
+      const totalBytes = Number(parts[1]) * 1024;
+      const usedBytes = Number(parts[2]) * 1024;
+      const freeBytes = Number(parts[3]) * 1024;
+
+      if (Number.isFinite(totalBytes) && Number.isFinite(usedBytes) && Number.isFinite(freeBytes)) {
+        return { totalBytes, usedBytes, freeBytes };
+      }
+    }
+  } catch (_error) {
+    // Fallback below.
+  }
+
+  const appBytes = await getPathSize(REPO_ROOT);
+  return {
+    totalBytes: STORAGE_FALLBACK_TOTAL_BYTES,
+    usedBytes: appBytes,
+    freeBytes: Math.max(STORAGE_FALLBACK_TOTAL_BYTES - appBytes, 0),
+  };
+}
+
+async function getStorageStats() {
+  const [system, databaseBytes, tempUploadsBytes, clientDistBytes, serverNodeModulesBytes, clientNodeModulesBytes, appBytes] =
+    await Promise.all([
+      getFilesystemUsage(REPO_ROOT),
+      Promise.all([
+        getPathSize(DATABASE_FILE),
+        getPathSize(`${DATABASE_FILE}-wal`),
+        getPathSize(`${DATABASE_FILE}-shm`),
+      ]).then((values) => values.reduce((sum, value) => sum + value, 0)),
+      getPathSize(TEMP_UPLOADS_DIR),
+      getPathSize(path.join(CLIENT_ROOT, 'dist')),
+      getPathSize(path.join(SERVER_ROOT, 'node_modules')),
+      getPathSize(path.join(CLIENT_ROOT, 'node_modules')),
+      getPathSize(REPO_ROOT),
+    ]);
+
+  return {
+    generatedAt: new Date().toISOString(),
+    totalBytes: system.totalBytes,
+    usedBytes: system.usedBytes,
+    freeBytes: system.freeBytes,
+    appBytes,
+    breakdown: [
+      { key: 'database', label: 'База данных', bytes: databaseBytes },
+      { key: 'tempUploads', label: 'Временные файлы', bytes: tempUploadsBytes },
+      { key: 'clientDist', label: 'Сборка клиента', bytes: clientDistBytes },
+      { key: 'serverNodeModules', label: 'server/node_modules', bytes: serverNodeModulesBytes },
+      { key: 'clientNodeModules', label: 'client/node_modules', bytes: clientNodeModulesBytes },
+    ],
+  };
+}
+
+async function emptyDirectory(targetPath) {
+  try {
+    const entries = await fs.readdir(targetPath, { withFileTypes: true });
+    await Promise.all(
+      entries.map((entry) =>
+        fs.rm(path.join(targetPath, entry.name), {
+          recursive: true,
+          force: true,
+        })
+      )
+    );
+    return entries.length;
+  } catch (_error) {
+    return 0;
+  }
 }
 
 function createModerationRouter(db) {
@@ -52,6 +176,7 @@ function createModerationRouter(db) {
            ON bm.id = b.banned_by
          ORDER BY u.id DESC`
       );
+
       const nowMs = Date.now();
       const normalized = users.map((user) => {
         const lastSeenAtMs = Number.isFinite(user.lastSeenAtMs) ? user.lastSeenAtMs : null;
@@ -61,6 +186,7 @@ function createModerationRouter(db) {
           isOnline: isOnlineByMs(lastSeenAtMs, nowMs),
         };
       });
+
       return res.json({ users: normalized });
     } catch (error) {
       return next(error);
@@ -81,13 +207,13 @@ function createModerationRouter(db) {
          WHERE id = ?`,
         [targetId]
       );
+
       if (!user) {
         return res.status(404).json({ error: 'Пользователь не найден' });
       }
 
       const stats = await db.get(
-        `SELECT
-           COUNT(m.id) AS totalMessages
+        `SELECT COUNT(m.id) AS totalMessages
          FROM users u
          LEFT JOIN chats c ON c.user_id = u.id
          LEFT JOIN messages m ON m.chat_id = c.id AND m.role = 'user'
@@ -155,7 +281,12 @@ function createModerationRouter(db) {
       }
 
       await db.run('UPDATE users SET role = ? WHERE id = ?', [role, targetId]);
-      await logAction(req.user.id, 'set_role', targetId, { from: target.role, to: role, targetName: target.name });
+      await logAction(req.user.id, 'set_role', targetId, {
+        from: target.role,
+        to: role,
+        targetName: target.name,
+      });
+
       return res.json({ success: true });
     } catch (error) {
       return next(error);
@@ -263,6 +394,7 @@ function createModerationRouter(db) {
         targetId,
         targetName: target.name,
       });
+
       return res.json({ success: true });
     } catch (error) {
       return next(error);
@@ -294,6 +426,48 @@ function createModerationRouter(db) {
       }));
 
       return res.json({ logs: normalized });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  router.get('/storage', requireRole(['owner']), async (req, res, next) => {
+    try {
+      const storage = await getStorageStats();
+      return res.json({ storage });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  router.post('/storage/cleanup', requireRole(['owner']), async (req, res, next) => {
+    try {
+      const action = String(req.body?.action || '').trim();
+      const result = {};
+
+      if (!['temp_uploads', 'audit_logs', 'vacuum', 'all'].includes(action)) {
+        return res.status(400).json({ error: 'Некорректное действие очистки' });
+      }
+
+      if (action === 'temp_uploads' || action === 'all') {
+        result.tempUploadsRemoved = await emptyDirectory(TEMP_UPLOADS_DIR);
+      }
+
+      if (action === 'audit_logs' || action === 'all') {
+        const deleteResult = await db.run('DELETE FROM moderator_audit_logs');
+        result.auditLogsRemoved = deleteResult.changes || 0;
+      }
+
+      if (action === 'vacuum' || action === 'all') {
+        await db.exec('PRAGMA wal_checkpoint(TRUNCATE);');
+        await db.exec('VACUUM;');
+        result.vacuum = true;
+      }
+
+      await logAction(req.user.id, `storage_cleanup_${action}`, null, result);
+
+      const storage = await getStorageStats();
+      return res.json({ success: true, result, storage });
     } catch (error) {
       return next(error);
     }
