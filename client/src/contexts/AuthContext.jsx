@@ -1,19 +1,28 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../utils/api';
+import useDocumentVisibility from '../hooks/useDocumentVisibility';
+import { getAdaptiveRefetchInterval } from '../lib/queryClient';
 import { clearStoredToken, getStoredToken, setStoredToken } from '../utils/authToken';
 
 const AuthContext = createContext(null);
 const authQueryKey = (token) => ['auth', 'me', token ?? 'guest'];
+const authPingQueryKey = (token) => ['auth', 'ping', token ?? 'guest'];
 
 async function fetchCurrentUser() {
   const { data } = await api.get('/auth/me');
   return data.user;
 }
 
+async function pingCurrentUserSession() {
+  const { data } = await api.get('/auth/ping');
+  return data?.ok === true;
+}
+
 export function AuthProvider({ children }) {
   const queryClient = useQueryClient();
   const [token, setToken] = useState(() => getStoredToken());
+  const isDocumentVisible = useDocumentVisibility();
 
   const {
     data: user = null,
@@ -27,6 +36,17 @@ export function AuthProvider({ children }) {
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
     retry: 1,
+  });
+
+  useQuery({
+    queryKey: authPingQueryKey(token),
+    queryFn: pingCurrentUserSession,
+    enabled: Boolean(token) && isDocumentVisible,
+    staleTime: 30000,
+    gcTime: 2 * 60 * 1000,
+    retry: 1,
+    refetchInterval: getAdaptiveRefetchInterval(60 * 1000, 3 * 60 * 1000),
+    refetchIntervalInBackground: false,
   });
 
   useEffect(() => {
