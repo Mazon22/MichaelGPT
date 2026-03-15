@@ -182,10 +182,12 @@ export default function Chat() {
   const [profileStatsLoading, setProfileStatsLoading] = useState(false);
   const [responseMode, setResponseMode] = useState('balanced');
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
+  const [isComposerFocused, setIsComposerFocused] = useState(false);
   const [aiQuota, setAiQuota] = useState(null);
   const [quotaNowMs, setQuotaNowMs] = useState(Date.now());
   const [streamingMessage, setStreamingMessage] = useState(null);
   const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
   const inputRef = useRef(null);
   const userMenuRef = useRef(null);
   const modeMenuRef = useRef(null);
@@ -220,8 +222,14 @@ export default function Chat() {
     [scheduleTimeout]
   );
 
-  const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+  const scrollToBottom = useCallback((behavior = 'auto') => {
+    const container = messagesContainerRef.current;
+    if (container) {
+      container.scrollTo({ top: container.scrollHeight, behavior });
+      return;
+    }
+
+    messagesEndRef.current?.scrollIntoView({ behavior });
   }, []);
 
   const stopStreaming = useCallback(() => {
@@ -331,7 +339,11 @@ export default function Chat() {
   }, [currentChat?.id, stopStreaming]);
 
   useEffect(() => {
-    scrollToBottom();
+    const frameId = window.requestAnimationFrame(() => {
+      scrollToBottom(streamingMessage ? 'auto' : 'smooth');
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
   }, [messages, isLoading, scrollToBottom, streamingMessage]);
 
   useEffect(() => {
@@ -378,6 +390,12 @@ export default function Chat() {
   const openUpdateModal = useCallback(() => {
     setUpdateModalOpen(true);
   }, []);
+
+  useEffect(() => {
+    if (!isMobileViewport) {
+      setIsComposerFocused(false);
+    }
+  }, [isMobileViewport]);
 
   useEffect(() => {
     const isDisabled = localStorage.getItem('michaelgpt_disable_updates');
@@ -597,6 +615,7 @@ export default function Chat() {
     });
 
     await waitNextFrame();
+    scrollToBottom('smooth');
     if (!isMountedRef.current) return;
 
     setIsLoading(true);
@@ -989,7 +1008,7 @@ export default function Chat() {
           </div>
         </header>
 
-        <div className="messages-container">
+        <div className="messages-container" ref={messagesContainerRef}>
           {!currentChat ? (
             <div className="welcome-screen">
               <motion.div
@@ -1063,6 +1082,8 @@ export default function Chat() {
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleKeyDown}
+              onFocus={() => setIsComposerFocused(true)}
+              onBlur={() => setIsComposerFocused(false)}
               placeholder="Напишите сообщение..."
               rows={1}
               disabled={!currentChat || isLoading || aiQuotaReached}
@@ -1143,7 +1164,7 @@ export default function Chat() {
       </Suspense>
 
       <Suspense fallback={null}>
-        <GlobalChatWidget user={user} />
+        <GlobalChatWidget user={user} suppressFloatingTrigger={isMobileViewport && isComposerFocused} />
       </Suspense>
     </div>
   );

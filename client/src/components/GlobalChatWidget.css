@@ -9,6 +9,13 @@
   gap: 12px;
 }
 
+.global-chat-root.suppressed {
+  opacity: 0;
+  transform: translateY(12px);
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
 .global-chat-toggle {
   display: inline-flex;
   align-items: center;
@@ -454,7 +461,7 @@
 @media (max-width: 768px) {
   .global-chat-root {
     right: 12px;
-    bottom: calc(96px + env(safe-area-inset-bottom));
+    bottom: calc(116px + env(safe-area-inset-bottom));
   }
 
   .global-chat-toggle {
@@ -488,7 +495,7 @@
 
   .global-chat-panel {
     width: calc(100vw - 24px);
-    height: min(62dvh, 520px);
+    height: min(60dvh, 500px);
     border-radius: 18px;
   }
 
@@ -530,12 +537,12 @@
 @media (max-width: 480px) {
   .global-chat-root {
     right: 10px;
-    bottom: calc(90px + env(safe-area-inset-bottom));
+    bottom: calc(112px + env(safe-area-inset-bottom));
   }
 
   .global-chat-panel {
     width: calc(100vw - 20px);
-    height: min(58dvh, 500px);
+    height: min(56dvh, 460px);
   }
 
   .global-chat-header {

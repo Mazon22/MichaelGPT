@@ -33,7 +33,7 @@ function roleBadge(role) {
   return null;
 }
 
-export default function GlobalChatWidget({ user }) {
+export default function GlobalChatWidget({ user, suppressFloatingTrigger = false }) {
   const queryClient = useQueryClient();
   const isDocumentVisible = useDocumentVisibility();
   const [isOpen, setIsOpen] = useState(false);
@@ -46,6 +46,7 @@ export default function GlobalChatWidget({ user }) {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const listRef = useRef(null);
   const lastSeenIdRef = useRef(0);
+  const forceScrollRef = useRef(false);
 
   const canWrite = Boolean(user?.id);
   const canOpenModeration = user?.role === 'owner' || user?.role === 'moderator';
@@ -136,8 +137,18 @@ export default function GlobalChatWidget({ user }) {
     );
   }, [messagesQuery.error, onlineQuery.error, statusQuery.error]);
 
+  const scrollMessagesToBottom = (behavior = 'smooth') => {
+    const container = listRef.current;
+    if (!container) return;
+
+    window.requestAnimationFrame(() => {
+      container.scrollTo({ top: container.scrollHeight, behavior });
+    });
+  };
+
   useEffect(() => {
     if (isOpen) {
+      forceScrollRef.current = true;
       setUnreadCount(0);
       const lastMessageId = messages.length ? messages[messages.length - 1].id : 0;
       if (lastMessageId > 0) {
@@ -160,9 +171,8 @@ export default function GlobalChatWidget({ user }) {
   useEffect(() => {
     if (!isOpen || !listRef.current) return undefined;
 
-    const container = listRef.current;
     const timer = window.setTimeout(() => {
-      container.scrollTo({ top: container.scrollHeight, behavior: 'auto' });
+      scrollMessagesToBottom('auto');
     }, 200);
 
     return () => {
@@ -175,8 +185,9 @@ export default function GlobalChatWidget({ user }) {
 
     const container = listRef.current;
     const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 50;
-    if (isAtBottom) {
-      container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+    if (forceScrollRef.current || isAtBottom) {
+      scrollMessagesToBottom(forceScrollRef.current ? 'auto' : 'smooth');
+      forceScrollRef.current = false;
     }
   }, [isOpen, messages]);
 
@@ -286,6 +297,7 @@ export default function GlobalChatWidget({ user }) {
     if (!content || !canWrite || sendMessageMutation.isPending || banInfo || isCooldownActive) return;
 
     setInputValue('');
+    forceScrollRef.current = true;
     await sendMessageMutation.mutateAsync(content);
   };
 
@@ -316,7 +328,7 @@ export default function GlobalChatWidget({ user }) {
   };
 
   return (
-    <div className="global-chat-root">
+    <div className={`global-chat-root ${suppressFloatingTrigger && !isOpen ? 'suppressed' : ''}`}>
       <AnimatePresence mode="wait">
         {isOpen && (
           <motion.section

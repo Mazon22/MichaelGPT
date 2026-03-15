@@ -2905,20 +2905,70 @@ body.sidebar-mobile-open {
 
   .messages-container {
     min-height: 0;
-    padding-bottom: 20px;
+    padding-bottom: 12px;
   }
 
   .input-container {
     position: relative;
     z-index: 2;
-    padding-bottom: calc(14px + env(safe-area-inset-bottom));
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
   }
 
   .input-wrapper {
     width: 100%;
+    gap: 8px;
+    padding: 10px;
+    border-radius: 18px;
   }
 
   .input-wrapper textarea {
     width: 100%;
+    min-height: 44px;
+    max-height: 112px;
+    padding: 6px 6px 0;
+  }
+
+  .response-mode-toggle {
+    height: 44px;
+    border-radius: 14px;
+    padding: 0 12px;
+  }
+
+  .send-btn {
+    width: 46px;
+    height: 46px;
+    border-radius: 14px;
+  }
+
+  .input-hint {
+    margin-top: 6px;
+    font-size: 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .input-container {
+    padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+  }
+
+  .input-wrapper {
+    padding: 8px;
+    border-radius: 16px;
+  }
+
+  .input-wrapper textarea {
+    min-height: 40px;
+    max-height: 96px;
+    font-size: 15px;
+  }
+
+  .response-mode-toggle {
+    height: 42px;
+    font-size: 12px;
+  }
+
+  .send-btn {
+    width: 44px;
+    height: 44px;
   }
 }
