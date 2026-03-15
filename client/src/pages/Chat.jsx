@@ -466,12 +466,7 @@ export default function Chat() {
   }, []);
 
   const openAttachmentSource = useCallback((attachment) => {
-    if (attachment?.viewUrl) {
-      window.open(attachment.viewUrl, '_blank', 'noopener,noreferrer');
-      return;
-    }
-
-    if (attachment?.content) {
+    if (attachment?.viewUrl || attachment?.content) {
       setAttachmentPreview(attachment);
     }
   }, []);

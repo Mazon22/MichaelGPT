@@ -17,6 +17,12 @@ export function isImageAttachment(attachment) {
   return String(attachment?.mimeType || '').startsWith('image/') || attachment?.kind === 'image';
 }
 
+export function getAttachmentTypeLabel(attachment) {
+  if (isImageAttachment(attachment)) return 'Изображение';
+  if (attachment?.kind === 'csv') return 'Таблица';
+  return 'Документ';
+}
+
 export function buildAttachmentPreview(content) {
   const text = String(content || '').trim();
   if (!text) return '';

@@ -1,5 +1,5 @@
 import { AlertCircle, File, FileSpreadsheet, FileText, ImageIcon, Loader2, X } from 'lucide-react';
-import { formatFileSize, isImageAttachment } from '../utils/chatAttachments';
+import { formatFileSize, getAttachmentTypeLabel, isImageAttachment } from '../utils/chatAttachments';
 
 function AttachmentIcon({ attachment }) {
   if (attachment.viewUrl && isImageAttachment(attachment)) {
@@ -24,9 +24,7 @@ function getAttachmentSubtitle(attachment) {
     return 'Ошибка загрузки';
   }
 
-  if (isImageAttachment(attachment)) return 'Изображение';
-  if (attachment.kind === 'csv') return 'Таблица';
-  return 'Документ';
+  return getAttachmentTypeLabel(attachment);
 }
 
 export default function ChatAttachmentList({

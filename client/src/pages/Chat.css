@@ -2863,6 +2863,7 @@
 .chat-attachment-list.message {
   margin: 0 0 12px;
   max-width: 100%;
+  align-items: center;
 }
 
 .chat-attachment-card {
@@ -3048,12 +3049,14 @@
   background: rgba(4, 4, 16, 0.72);
   backdrop-filter: blur(6px);
   z-index: 320;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
 }
 
 .attachment-preview-modal {
-  position: fixed;
-  inset: 50% auto auto 50%;
-  transform: translate(-50%, -50%);
+  position: relative;
   width: min(720px, calc(100vw - 32px));
   max-height: min(78vh, 760px);
   display: flex;
@@ -3101,6 +3104,10 @@
 .attachment-preview-content {
   overflow: auto;
   padding: 18px;
+}
+
+.attachment-preview-content:not(.image) {
+  text-align: left;
 }
 
 .attachment-preview-content pre {
@@ -3371,6 +3378,10 @@ body.sidebar-mobile-open {
   color: #8b8fa0;
   font-size: 12px;
   white-space: nowrap;
+}
+
+.chat-attachment-card.message {
+  width: min(560px, 100%);
 }
 
 .attachment-preview-content.image {
