@@ -2,7 +2,8 @@
 import { flushSync } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
-import api from '../utils/api';
+import { Suspense, lazy } from 'react';
+import { chatService } from '../services/chatService';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -23,9 +24,26 @@ import {
   Bell,
 } from 'lucide-react';
 import './Chat.css';
-import ProfileModal from './ProfileModal';
-import UpdateModal from './UpdateModal';
-import GlobalChatWidget from '../components/GlobalChatWidget';
+import { copyToClipboard } from '../utils/copyToClipboard';
+import { BLOCKED_MESSAGE_WARNING, checkMessageContent } from '../utils/contentFilter';
+
+const ProfileModal = lazy(() => import('./ProfileModal'));
+const UpdateModal = lazy(() => import('./UpdateModal'));
+const GlobalChatWidget = lazy(() => import('../components/GlobalChatWidget'));
+const UPDATE_MODAL_DELAY_MS = 1000;
+const modeOptions = [
+  { value: 'balanced', label: 'Стандарт' },
+  { value: 'short', label: 'Кратко' },
+  { value: 'deep', label: 'Глубоко' },
+];
+
+function createLocalMessageId(prefix = 'local') {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function waitNextFrame() {
+  return new Promise((resolve) => requestAnimationFrame(resolve));
+}
 
 function formatMessageTime(value) {
   if (!value) return '';
@@ -174,6 +192,51 @@ export default function Chat() {
   const currentChatIdRef = useRef(null);
   const messagesRequestSeqRef = useRef(0);
   const backgroundRef = useRef(null);
+  const isMountedRef = useRef(true);
+  const timeoutIdsRef = useRef(new Set());
+  const streamSessionRef = useRef(0);
+
+  const scheduleTimeout = useCallback((callback, delay) => {
+    const timeoutId = window.setTimeout(() => {
+      timeoutIdsRef.current.delete(timeoutId);
+      callback();
+    }, delay);
+
+    timeoutIdsRef.current.add(timeoutId);
+    return timeoutId;
+  }, []);
+
+  const clearScheduledTimeouts = useCallback(() => {
+    timeoutIdsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
+    timeoutIdsRef.current.clear();
+  }, []);
+
+  const waitForDelay = useCallback(
+    (delay) =>
+      new Promise((resolve) => {
+        scheduleTimeout(resolve, delay);
+      }),
+    [scheduleTimeout]
+  );
+
+  const scrollToBottom = useCallback(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+  }, []);
+
+  const stopStreaming = useCallback(() => {
+    streamSessionRef.current += 1;
+    setStreamingMessage(null);
+  }, []);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+
+    return () => {
+      isMountedRef.current = false;
+      streamSessionRef.current += 1;
+      clearScheduledTimeouts();
+    };
+  }, [clearScheduledTimeouts]);
 
   useEffect(() => {
     currentChatIdRef.current = currentChat?.id ?? null;
@@ -185,53 +248,63 @@ export default function Chat() {
   }, []);
 
   useEffect(() => {
-    if (!userMenuOpen) return;
-    const handleClickOutside = (e) => {
-      if (userMenuRef.current && !userMenuRef.current.contains(e.target)) {
+    if (!userMenuOpen) return undefined;
+
+    const handleClickOutside = (event) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
         setUserMenuOpen(false);
       }
     };
+
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [userMenuOpen]);
 
   useEffect(() => {
-    if (!modeMenuOpen) return;
-    const handleClickOutside = (e) => {
-      if (modeMenuRef.current && !modeMenuRef.current.contains(e.target)) {
+    if (!modeMenuOpen) return undefined;
+
+    const handleClickOutside = (event) => {
+      if (modeMenuRef.current && !modeMenuRef.current.contains(event.target)) {
         setModeMenuOpen(false);
       }
     };
+
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [modeMenuOpen]);
 
   useEffect(() => {
-    if (!profileModalOpen) return;
-    const handle = (e) => {
-      if (profileModalRef.current && !profileModalRef.current.contains(e.target)) {
+    if (!profileModalOpen) return undefined;
+
+    const handleClickOutside = (event) => {
+      if (profileModalRef.current && !profileModalRef.current.contains(event.target)) {
         setProfileModalOpen(false);
       }
     };
-    document.addEventListener('mousedown', handle);
-    return () => document.removeEventListener('mousedown', handle);
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [profileModalOpen]);
 
   useEffect(() => {
+    stopStreaming();
+    setMessages([]);
+
     if (currentChat?.id) {
       loadMessages(currentChat.id);
       setUserMenuOpen(false);
     }
-  }, [currentChat?.id]);
+  }, [currentChat?.id, stopStreaming]);
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, isLoading]);
+  }, [messages, isLoading, scrollToBottom, streamingMessage]);
 
   useEffect(() => {
     if (!aiQuota?.resetAtMs) return undefined;
-    const timer = setInterval(() => setQuotaNowMs(Date.now()), 1000);
-    return () => clearInterval(timer);
+
+    const timer = window.setInterval(() => setQuotaNowMs(Date.now()), 1000);
+    return () => window.clearInterval(timer);
   }, [aiQuota?.resetAtMs]);
 
   useEffect(() => {
@@ -249,144 +322,153 @@ export default function Chat() {
     return () => window.removeEventListener('pointermove', handleMove);
   }, []);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
-  };
-
-  const openProfileModal = async () => {
+  const openProfileModal = useCallback(async () => {
     setProfileModalOpen(true);
     if (profileStats) return;
+
     setProfileStatsLoading(true);
     try {
-      const { data } = await api.get('/user/stats');
-      setProfileStats(data);
+      const { data } = await chatService.getProfileStats();
+      if (isMountedRef.current) {
+        setProfileStats(data);
+      }
     } catch (error) {
       console.error('Ошибка загрузки статистики:', error);
     } finally {
-      setProfileStatsLoading(false);
+      if (isMountedRef.current) {
+        setProfileStatsLoading(false);
+      }
     }
-  };
+  }, [profileStats]);
 
-  const openUpdateModal = () => {
-    console.log('UpdateModal: opening manually');
+  const openUpdateModal = useCallback(() => {
     setUpdateModalOpen(true);
-  };
+  }, []);
 
   useEffect(() => {
     const isDisabled = localStorage.getItem('michaelgpt_disable_updates');
-    console.log('UpdateModal: isDisabled =', isDisabled);
-    if (!isDisabled) {
-      const lastSeen = localStorage.getItem('michaelgpt_last_update_seen');
-      console.log('UpdateModal: lastSeen =', lastSeen);
+    if (isDisabled) return undefined;
+
+    const lastSeen = localStorage.getItem('michaelgpt_last_update_seen');
+
+    scheduleTimeout(() => {
+      if (!isMountedRef.current) return;
+
+      setUpdateModalOpen(true);
+
       if (!lastSeen) {
-        console.log('UpdateModal: first visit, showing modal');
-        setTimeout(() => {
-          setUpdateModalOpen(true);
-          localStorage.setItem('michaelgpt_last_update_seen', new Date().toISOString());
-          console.log('UpdateModal: modal opened');
-        }, 1000);
-      } else {
-        console.log('UpdateModal: not first visit, showing modal anyway');
-        setTimeout(() => {
-          setUpdateModalOpen(true);
-        }, 1000);
+        localStorage.setItem('michaelgpt_last_update_seen', new Date().toISOString());
       }
-    } else {
-      console.log('UpdateModal: updates disabled by user');
+    }, UPDATE_MODAL_DELAY_MS);
+
+    return undefined;
+  }, [scheduleTimeout]);
+
+  const loadAiQuota = useCallback(async () => {
+    try {
+      const { data } = await chatService.getAiQuota();
+      if (isMountedRef.current) {
+        setAiQuota(data?.quota || null);
+      }
+    } catch (_error) {
+      if (isMountedRef.current) {
+        setAiQuota(null);
+      }
     }
   }, []);
 
-  const loadAiQuota = async () => {
+  const loadChats = useCallback(async () => {
     try {
-      const { data } = await api.get('/ai/status');
-      setAiQuota(data?.quota || null);
-    } catch (_error) {
-      setAiQuota(null);
-    }
-  };
+      const { data } = await chatService.getChats();
+      const nextChats = data?.chats || [];
 
-  const loadChats = async () => {
-    try {
-      const { data } = await api.get('/chats');
-      setChats(data.chats);
-      if (data.chats.length > 0 && !currentChat) {
-        setCurrentChat(data.chats[0]);
-      }
+      if (!isMountedRef.current) return;
+
+      setChats(nextChats);
+      setCurrentChat((prev) => prev || nextChats[0] || null);
     } catch (error) {
       console.error('Ошибка загрузки чатов:', error);
     }
-  };
+  }, []);
 
-  const loadMessages = async (chatId) => {
+  const loadMessages = useCallback(async (chatId) => {
     const requestSeq = ++messagesRequestSeqRef.current;
+
     try {
-      const { data } = await api.get(`/chats/${chatId}/messages`);
+      const { data } = await chatService.getMessages(chatId);
+      if (!isMountedRef.current) return;
       if (currentChatIdRef.current !== chatId) return;
       if (messagesRequestSeqRef.current !== requestSeq) return;
-      setMessages((prev) => {
-        const pendingMessages = prev.filter((m) => m.isPending);
-        if (!pendingMessages.length) return data.messages;
-        return [...data.messages, ...pendingMessages];
-      });
+
+      setMessages(data?.messages || []);
     } catch (error) {
       console.error('Ошибка загрузки сообщений:', error);
     }
-  };
+  }, []);
 
-  const createNewChat = async () => {
+  const createNewChat = useCallback(async () => {
     try {
-      const { data } = await api.post('/chats', { title: 'Новый чат' });
-      setChats([data.chat, ...chats]);
+      const { data } = await chatService.createChat();
+      if (!isMountedRef.current) return;
+
+      setChats((prev) => [data.chat, ...prev]);
       setCurrentChat(data.chat);
       setMessages([]);
       setUserMenuOpen(false);
-      inputRef.current?.focus();
+      requestAnimationFrame(() => inputRef.current?.focus());
     } catch (error) {
       console.error('Ошибка создания чата:', error);
     }
-  };
+  }, []);
 
-  const deleteChat = async (chatId, e) => {
-    e.stopPropagation();
-    try {
-      await api.delete(`/chats/${chatId}`);
-      setChats(chats.filter((c) => c.id !== chatId));
-      if (currentChat?.id === chatId) {
-        setCurrentChat(null);
-        setMessages([]);
+  const deleteChat = useCallback(
+    async (chatId, event) => {
+      event.stopPropagation();
+
+      try {
+        await chatService.deleteChat(chatId);
+        if (!isMountedRef.current) return;
+
+        const nextChats = chats.filter((chat) => chat.id !== chatId);
+        setChats(nextChats);
+
+        if (currentChat?.id === chatId) {
+          setCurrentChat(nextChats[0] || null);
+          setMessages([]);
+        }
+      } catch (error) {
+        console.error('Ошибка удаления чата:', error);
       }
-    } catch (error) {
-      console.error('Ошибка удаления чата:', error);
-    }
-  };
+    },
+    [chats, currentChat?.id]
+  );
 
-  const displayChats = chats;
-
-  const startEditingChat = (chat, e) => {
-    e.stopPropagation();
+  const startEditingChat = useCallback((chat, event) => {
+    event.stopPropagation();
     setEditingChatId(chat.id);
     setEditTitle(chat.title);
-  };
+  }, []);
 
-  const saveChatTitle = async () => {
-    if (!editTitle.trim() || !currentChat) return;
+  const saveChatTitle = useCallback(async () => {
+    const trimmedTitle = editTitle.trim();
+    if (!trimmedTitle || !currentChat) return;
 
     try {
-      const { data } = await api.put(`/chats/${currentChat.id}`, { title: editTitle });
-      setChats(chats.map((c) => (c.id === currentChat.id ? data.chat : c)));
+      const { data } = await chatService.updateChat(currentChat.id, trimmedTitle);
+      if (!isMountedRef.current) return;
+
+      setChats((prev) => prev.map((chat) => (chat.id === currentChat.id ? data.chat : chat)));
       setCurrentChat(data.chat);
       setEditingChatId(null);
     } catch (error) {
       console.error('Ошибка обновления чата:', error);
     }
-  };
+  }, [currentChat, editTitle]);
 
-  const cancelEditing = () => {
+  const cancelEditing = useCallback(() => {
     setEditingChatId(null);
     setEditTitle('');
-  };
-
-  const waitNextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+  }, []);
 
   const formatHms = (seconds) => {
     const s = Math.max(0, Number(seconds) || 0);
@@ -396,30 +478,37 @@ export default function Chat() {
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
   };
 
-  const sendMessage = async () => {
+  const sendMessage = useCallback(async () => {
     const content = inputValue.trim();
     const aiQuotaReached =
       aiQuota && !aiQuota.hasUnlimited && Number(aiQuota.remaining) <= 0;
-    if (!content || isLoading || aiQuotaReached) return;
+
+    if (!content || !currentChat || isLoading || aiQuotaReached) return;
 
     const nowIso = new Date().toISOString();
-    const localId = `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const activeChatId = currentChat.id;
+    const localId = createLocalMessageId('local-user');
+    const wasFirstPersistedMessage = !messages.some((message) => {
+      const messageId = Number(message.id);
+      return Number.isInteger(messageId) && messageId > 0 && !message.isLocalOnly;
+    });
 
-    const makeUserMessage = () => ({
+    const userMessage = {
       id: localId,
       localId,
       role: 'user',
       content,
       created_at: nowIso,
       isPending: true,
-    });
+    };
 
-    const makeErrorMessage = (text) => ({
-      id: `local-error-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    const makeAssistantMessage = (text, options = {}) => ({
+      id: createLocalMessageId(options.idPrefix || 'local-assistant'),
       role: 'assistant',
-      content: `⚠️ ${text}`,
+      content: text,
       created_at: new Date().toISOString(),
-      isError: true,
+      isError: Boolean(options.isError),
+      isLocalOnly: Boolean(options.isLocalOnly),
     });
 
     const getErrorText = (error) => {
@@ -429,138 +518,183 @@ export default function Chat() {
       return 'Ошибка соединения с сервером';
     };
 
-    const pushAuthed = (msg) => setMessages((prev) => [...prev, msg]);
+    if (checkMessageContent(content)) {
+      setInputValue('');
 
-    setInputValue('');
+      flushSync(() => {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: createLocalMessageId('local-blocked-user'),
+            role: 'user',
+            content,
+            created_at: nowIso,
+            isLocalOnly: true,
+          },
+          makeAssistantMessage(BLOCKED_MESSAGE_WARNING, {
+            idPrefix: 'local-blocked-warning',
+            isLocalOnly: true,
+          }),
+        ]);
+      });
 
-    if (!currentChat) {
-      setIsLoading(false);
+      await waitNextFrame();
+      inputRef.current?.focus();
       return;
     }
 
-    const wasFirstMessage = messages.length === 0;
-    const userMessage = makeUserMessage();
+    const streamSessionId = streamSessionRef.current + 1;
+    streamSessionRef.current = streamSessionId;
+
+    setInputValue('');
+
     flushSync(() => {
-      pushAuthed(userMessage);
+      setMessages((prev) => [...prev, userMessage]);
     });
+
     await waitNextFrame();
+    if (!isMountedRef.current) return;
+
     setIsLoading(true);
 
     try {
-      const { data } = await api.post(`/chats/${currentChat.id}/messages`, {
+      const { data } = await chatService.sendMessage(activeChatId, {
         content,
         responseMode,
       });
 
+      if (!isMountedRef.current || currentChatIdRef.current !== activeChatId) return;
+
       const aiMessage = data.aiMessage;
-      
+
       setMessages((prev) => {
-        const replaced = prev.map((m) =>
-          m.localId === localId ? { ...data.userMessage, localId, isPending: false } : m
+        const replaced = prev.map((message) =>
+          message.localId === localId
+            ? { ...data.userMessage, localId, isPending: false }
+            : message
         );
-        const hasAiMessage = replaced.some((m) => m.id === aiMessage.id);
-        if (hasAiMessage) return replaced;
+        const hasAiMessage = replaced.some((message) => message.id === aiMessage.id);
+
+        if (hasAiMessage) {
+          return replaced;
+        }
+
         return [...replaced, { ...aiMessage, isStreaming: true }];
       });
 
-      const fullContent = aiMessage.content;
+      const words = aiMessage.content.split(/(?=\s+)/);
       let currentContent = '';
-      const words = fullContent.split(/(?=\s+)/);
-      
+
       setStreamingMessage({ id: aiMessage.id, content: '' });
-      
-      for (let i = 0; i < words.length; i++) {
-        await new Promise(resolve => setTimeout(resolve, 8 + Math.random() * 12));
-        currentContent += words[i];
+
+      for (const word of words) {
+        await waitForDelay(8 + Math.random() * 12);
+
+        if (
+          !isMountedRef.current ||
+          streamSessionRef.current !== streamSessionId ||
+          currentChatIdRef.current !== activeChatId
+        ) {
+          return;
+        }
+
+        currentContent += word;
         setStreamingMessage({ id: aiMessage.id, content: currentContent });
       }
-      
+
+      if (
+        !isMountedRef.current ||
+        streamSessionRef.current !== streamSessionId ||
+        currentChatIdRef.current !== activeChatId
+      ) {
+        return;
+      }
+
       setMessages((prev) =>
-        prev.map((m) =>
-          m.id === aiMessage.id ? { ...m, isStreaming: false } : m
+        prev.map((message) =>
+          message.id === aiMessage.id ? { ...message, isStreaming: false } : message
         )
       );
       setStreamingMessage(null);
 
-      if (wasFirstMessage) {
-        const newTitle = content.slice(0, 30) + (content.length > 30 ? '...' : '');
-        const { data: chatData } = await api.put(`/chats/${currentChat.id}`, { title: newTitle });
-        setCurrentChat(chatData.chat);
-        setChats((chats) => chats.map((c) => (c.id === currentChat.id ? chatData.chat : c)));
+      if (wasFirstPersistedMessage) {
+        const newTitle = `${content.slice(0, 30)}${content.length > 30 ? '...' : ''}`;
+        const { data: chatData } = await chatService.updateChat(activeChatId, newTitle);
+
+        if (isMountedRef.current && currentChatIdRef.current === activeChatId) {
+          setCurrentChat(chatData.chat);
+          setChats((prev) =>
+            prev.map((chat) => (chat.id === activeChatId ? chatData.chat : chat))
+          );
+        }
       }
 
       setProfileStats(null);
       await loadAiQuota();
     } catch (error) {
-      const errText = getErrorText(error);
-      const isRateLimit = errText.includes('Rate limit') || errText.includes('rate_limit');
-      const displayText = isRateLimit
-        ? 'Превышен лимит запросов к AI. Попробуйте через несколько минут.'
-        : errText;
-      setMessages((prev) =>
-        prev.map((m) => (m.localId === localId ? { ...m, isPending: false, isError: true } : m))
-      );
-      pushAuthed(makeErrorMessage(displayText));
-      if (error?.response?.data?.quota) {
+      if (isMountedRef.current && currentChatIdRef.current === activeChatId) {
+        const errText = getErrorText(error);
+        const isRateLimit = errText.includes('Rate limit') || errText.includes('rate_limit');
+        const isBlocked = error?.response?.data?.blocked === true;
+        const displayText = isBlocked
+          ? BLOCKED_MESSAGE_WARNING
+          : isRateLimit
+            ? 'Превышен лимит запросов к AI. Попробуйте через несколько минут.'
+            : errText;
+
+        setMessages((prev) => {
+          const nextMessages = prev.map((message) =>
+            message.localId === localId ? { ...message, isPending: false, isError: true } : message
+          );
+
+          return [
+            ...nextMessages,
+            makeAssistantMessage(isBlocked ? displayText : `⚠️ ${displayText}`, {
+              isError: !isBlocked,
+            }),
+          ];
+        });
+      }
+
+      if (error?.response?.data?.quota && isMountedRef.current) {
         setAiQuota(error.response.data.quota);
       } else {
         await loadAiQuota();
       }
     } finally {
-      setIsLoading(false);
+      if (isMountedRef.current) {
+        setIsLoading(false);
+      }
     }
-  };
+  }, [aiQuota, currentChat, inputValue, isLoading, loadAiQuota, messages, responseMode, waitForDelay]);
 
   const copyMessage = useCallback(async (content, id) => {
     try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(content);
-      } else {
-        const textarea = document.createElement('textarea');
-        textarea.value = content;
-        textarea.style.position = 'fixed';
-        textarea.style.opacity = '0';
-        document.body.appendChild(textarea);
-        textarea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textarea);
-      }
+      await copyToClipboard(content);
       setCopiedId(id);
-      setTimeout(() => setCopiedId(null), 2000);
-    } catch (err) {
-      console.error('Ошибка копирования:', err);
+      scheduleTimeout(() => setCopiedId(null), 2000);
+    } catch (error) {
+      console.error('Ошибка копирования:', error);
     }
-  }, []);
+  }, [scheduleTimeout]);
 
   const copyCode = useCallback(async (code, key) => {
     try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(code);
-      } else {
-        const textarea = document.createElement('textarea');
-        textarea.value = code;
-        textarea.style.position = 'fixed';
-        textarea.style.opacity = '0';
-        document.body.appendChild(textarea);
-        textarea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textarea);
-      }
+      await copyToClipboard(code);
       setCopiedCodeKey(key);
-      setTimeout(() => setCopiedCodeKey(null), 2000);
-    } catch (err) {
-      console.error('Ошибка копирования кода:', err);
+      scheduleTimeout(() => setCopiedCodeKey(null), 2000);
+    } catch (error) {
+      console.error('Ошибка копирования кода:', error);
     }
-  }, []);
+  }, [scheduleTimeout]);
 
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
+  const handleKeyDown = useCallback((event) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
       sendMessage();
     }
-  };
+  }, [sendMessage]);
 
-  const msgs = messages;
   const msgsLength = messages.length;
   const aiQuotaReached =
     aiQuota && !aiQuota.hasUnlimited && Number(aiQuota.remaining) <= 0;
@@ -574,9 +708,11 @@ export default function Chat() {
       : 0;
   const renderedMessages = useMemo(
     () =>
-      msgs.map((message, index) => {
-        const isLastAiMessage = streamingMessage && message.id === streamingMessage.id;
-        const streamingContent = isLastAiMessage ? streamingMessage.content : undefined;
+      messages.map((message, index) => {
+        const streamingContent =
+          streamingMessage && message.id === streamingMessage.id
+            ? streamingMessage.content
+            : undefined;
         
         return (
           <Message
@@ -592,13 +728,8 @@ export default function Chat() {
           />
         );
       }),
-    [msgs, copiedId, copyMessage, copiedCodeKey, copyCode, streamingMessage]
+    [messages, copiedId, copyMessage, copiedCodeKey, copyCode, streamingMessage, user]
   );
-  const modeOptions = [
-    { value: 'balanced', label: 'Стандарт' },
-    { value: 'short', label: 'Кратко' },
-    { value: 'deep', label: 'Глубоко' },
-  ];
   const selectedModeLabel = modeOptions.find((item) => item.value === responseMode)?.label || 'Стандарт';
 
   return (
@@ -630,7 +761,7 @@ export default function Chat() {
             exit={{ width: 0, opacity: 0 }}
             transition={{ duration: 0.14, ease: 'easeOut' }}
             style={{ overflow: 'hidden' }}
-            className="sidebar"
+            className={`sidebar ${sidebarOpen ? 'open' : ''}`}
           >
             <div className="sidebar-header">
               <div className="logo">
@@ -648,7 +779,7 @@ export default function Chat() {
             </button>
 
             <div className="chats-list">
-              {displayChats.map((chat) => (
+              {chats.map((chat) => (
                 <motion.div
                   key={chat.id}
                   initial={{ opacity: 0, y: 10 }}
@@ -708,7 +839,7 @@ export default function Chat() {
                   )}
                 </motion.div>
               ))}
-              {displayChats.length === 0 && (
+              {chats.length === 0 && (
                 <div className="no-chats">
                   <MessageSquare size={40} color="var(--text-muted)" />
                   <p>Нет чатов</p>
@@ -924,28 +1055,28 @@ export default function Chat() {
         </div>
       </main>
 
-      <ProfileModal
-        isOpen={profileModalOpen}
-        onClose={() => setProfileModalOpen(false)}
-        user={user}
-        stats={profileStats}
-        isLoading={profileStatsLoading}
-        modalRef={profileModalRef}
-        updateUser={updateUser}
-      />
+      <Suspense fallback={null}>
+        <ProfileModal
+          isOpen={profileModalOpen}
+          onClose={() => setProfileModalOpen(false)}
+          user={user}
+          stats={profileStats}
+          isLoading={profileStatsLoading}
+          modalRef={profileModalRef}
+          updateUser={updateUser}
+        />
+      </Suspense>
 
-      <UpdateModal
-        isOpen={updateModalOpen}
-        onClose={() => setUpdateModalOpen(false)}
-      />
+      <Suspense fallback={null}>
+        <UpdateModal
+          isOpen={updateModalOpen}
+          onClose={() => setUpdateModalOpen(false)}
+        />
+      </Suspense>
 
-      <GlobalChatWidget user={user} />
+      <Suspense fallback={null}>
+        <GlobalChatWidget user={user} />
+      </Suspense>
     </div>
   );
 }
-
-
-
-
-
-

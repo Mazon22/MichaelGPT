@@ -1,23 +1,36 @@
 import { useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { X, Sparkles, Bug, Palette, Zap, Star, EyeOff, Eye } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { Bug, Eye, EyeOff, Sparkles, Star, X, Zap } from 'lucide-react';
 
 const UPDATES = [
+  {
+    date: '15.03.2026',
+    title: 'Улучшения стабильности и качества',
+    icon: <Zap size={20} />,
+    changes: [
+      'Повышена общая стабильность авторизации и работы чата.',
+      'Улучшена обработка ошибок и проблем с подключением.',
+      'Обновлена система ограничений для отдельных типов запросов.',
+      'Сделана более плавная и предсказуемая работа интерфейса при переключении между чатами.',
+      'Ускорена загрузка отдельных частей приложения.',
+      'Улучшено качество внутренних механизмов, влияющих на надежность и отзывчивость сайта.',
+    ],
+  },
   {
     date: '02.03.2026',
     title: 'Глобальное обновление дизайна',
     icon: <Sparkles size={20} />,
     changes: [
-      'Полностью переработан дизайн чата: стеклянные панели с backdrop-blur и градиентами',
-      'Анимированная нижняя панель: shimmer-эффекты, пульсирующая кнопка отправки',
-      'Улучшенная боковая панель: градиентный логотип с пульсацией, мерцающий badge',
-      'Эффект печати сообщений: текст появляется постепенно, как в ChatGPT',
-      'Улучшенные сообщения: градиентные аватары, переливающийся ник нейросети',
-      'Глобальный чат: обновлённый дизайн панели и кнопки',
-      'Квота AI: анимированный прогресс-бар с вращающимся фоном',
-      'Улучшенная форма профиля: аватар, имя и почта в едином стиле',
-      'Dropdown меню: с вращающимся conic-градиентом',
-      'Кастомные скроллбары с градиентной темой',
+      'Полностью переработан дизайн чата: стеклянные панели с backdrop-blur и градиентами.',
+      'Анимированная нижняя панель: shimmer-эффекты и пульсирующая кнопка отправки.',
+      'Улучшенная боковая панель: градиентный логотип с пульсацией и мерцающий бейдж.',
+      'Эффект печати сообщений: текст появляется постепенно, как в ChatGPT.',
+      'Улучшенные сообщения: градиентные аватары и переливающийся ник нейросети.',
+      'Глобальный чат: обновленный дизайн панели и кнопок.',
+      'Квота AI: анимированный прогресс-бар с вращающимся фоном.',
+      'Улучшенная форма профиля: аватар, имя и почта в едином стиле.',
+      'Dropdown-меню с вращающимся conic-градиентом.',
+      'Кастомные скроллбары с градиентной темой.',
     ],
   },
   {
@@ -25,8 +38,8 @@ const UPDATES = [
     title: 'Исправление ошибок и улучшение профиля',
     icon: <Bug size={18} />,
     changes: [
-      'Исправлен баг: опыт теперь сохраняется после удаления чатов',
-      'Обновлён профиль: компактный вид с основной статистикой',
+      'Исправлен баг: опыт теперь сохраняется после удаления чатов.',
+      'Обновлен профиль: компактный вид с основной статистикой.',
     ],
   },
 ];
@@ -49,16 +62,15 @@ export default function UpdateModal({ isOpen, onClose }) {
   }, [isOpen]);
 
   const handleToggleDisable = () => {
-    const newValue = !disableUpdates;
-    setDisableUpdates(newValue);
-    if (newValue) {
+    const nextValue = !disableUpdates;
+    setDisableUpdates(nextValue);
+
+    if (nextValue) {
       localStorage.setItem(STORAGE_DISABLE_KEY, 'true');
     } else {
       localStorage.removeItem(STORAGE_DISABLE_KEY);
     }
   };
-
-  const latestUpdate = UPDATES[0];
 
   return (
     <AnimatePresence>
@@ -80,7 +92,7 @@ export default function UpdateModal({ isOpen, onClose }) {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.92, y: 20 }}
               transition={{ type: 'spring', damping: 22, stiffness: 300 }}
-              onClick={(e) => e.stopPropagation()}
+              onClick={(event) => event.stopPropagation()}
             >
               <div className="update-modal-header">
                 <div className="update-modal-title-row">
@@ -119,8 +131,8 @@ export default function UpdateModal({ isOpen, onClose }) {
                         </div>
                       </div>
                       <ul className="update-item-list">
-                        {update.changes.map((change, i) => (
-                          <li key={i}>{change}</li>
+                        {update.changes.map((change, changeIndex) => (
+                          <li key={changeIndex}>{change}</li>
                         ))}
                       </ul>
                     </div>

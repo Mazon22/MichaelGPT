@@ -6,11 +6,13 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
 
+const { isAllowedOrigin, resolveRegistrationRole } = require('./config/appConfig');
 const db = require('./database');
 const authMiddleware = require('./middleware/auth');
 const createGlobalChatRouter = require('./routes/globalChat');
 const createModerationRouter = require('./routes/moderation');
 const { getAiQuota } = require('./services/chatPolicies');
+const { BLOCKED_MESSAGE_RESPONSE, checkMessageContent } = require('./services/contentFilter');
 
 const PORT = Number(process.env.PORT || 5000);
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -18,7 +20,7 @@ const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const GROQ_MODEL = process.env.GROQ_MODEL || 'meta-llama/llama-4-scout-17b-16e-instruct';
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const SYSTEM_PROMPT =
-  'РўС‹ MichaelGPT - СѓРјРЅС‹Р№, РґСЂСѓР¶РµР»СЋР±РЅС‹Р№ Рё РїРѕР»РµР·РЅС‹Р№ AI-Р°СЃСЃРёСЃС‚РµРЅС‚. РћС‚РІРµС‡Р°Р№ РїРѕРґСЂРѕР±РЅРѕ Рё РёРЅС„РѕСЂРјР°С‚РёРІРЅРѕ.';
+  '\u0422\u044b MichaelGPT - \u0443\u043c\u043d\u044b\u0439, \u0434\u0440\u0443\u0436\u0435\u043b\u044e\u0431\u043d\u044b\u0439 \u0438 \u043f\u043e\u043b\u0435\u0437\u043d\u044b\u0439 AI-\u0430\u0441\u0441\u0438\u0441\u0442\u0435\u043d\u0442. \u041e\u0442\u0432\u0435\u0447\u0430\u0439 \u043f\u043e\u0434\u0440\u043e\u0431\u043d\u043e \u0438 \u0438\u043d\u0444\u043e\u0440\u043c\u0430\u0442\u0438\u0432\u043d\u043e.';
 
 function normalizeResponseMode(value) {
   const mode = String(value || '').trim().toLowerCase();
@@ -124,7 +126,13 @@ const app = express();
 
 app.use(
   cors({
-    origin: '*',
+    origin(origin, callback) {
+      if (isAllowedOrigin(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(createError(403, 'CORS origin is not allowed'));
+    },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   })
@@ -228,7 +236,7 @@ app.post(
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const role = name.toLowerCase() === 'michael' ? 'owner' : 'user';
+    const role = resolveRegistrationRole(email);
 
     try {
       const result = await db.run('INSERT INTO users (email, password, name, role) VALUES (?, ?, ?, ?)', [
@@ -447,6 +455,12 @@ app.post(
       throw createError(404, 'Р§Р°С‚ РЅРµ РЅР°Р№РґРµРЅ');
     }
 
+    if (checkMessageContent(content)) {
+      return res.status(422).json({
+        error: BLOCKED_MESSAGE_RESPONSE,
+        blocked: true,
+      });
+    }
 
     const quota = await getAiQuota(db, req.user.id, req.user);
     if (!quota.hasUnlimited && quota.remaining <= 0) {
@@ -674,5 +688,3 @@ start().catch((error) => {
   console.error('Startup error:', error.message);
   process.exit(1);
 });
-
-

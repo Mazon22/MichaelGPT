@@ -1,7 +1,20 @@
-﻿import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
 import { BadgeCheck, Crown, Globe, MessageCircle, Send, Shield, Trash2, User, X } from 'lucide-react';
-import api from '../utils/api';
+import useDocumentVisibility from '../hooks/useDocumentVisibility';
+import { getAdaptiveRefetchInterval } from '../lib/queryClient';
+import {
+  deleteGlobalChatMessage,
+  fetchGlobalChatLatestMessage,
+  fetchGlobalChatMessages,
+  fetchGlobalChatOnline,
+  fetchGlobalChatStatus,
+  fetchGlobalChatUserProfile,
+  globalChatQueryKeys,
+  GLOBAL_CHAT_MESSAGES_LIMIT,
+  sendGlobalChatMessage,
+} from '../services/globalChatService';
 import ModerationPanel from './moderation/ModerationPanel';
 import ChatUserProfileModal from './global-chat/ChatUserProfileModal';
 import './GlobalChatWidget.css';
@@ -21,27 +34,89 @@ function roleBadge(role) {
 }
 
 export default function GlobalChatWidget({ user }) {
+  const queryClient = useQueryClient();
+  const isDocumentVisible = useDocumentVisibility();
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState('');
   const [unreadCount, setUnreadCount] = useState(0);
-  const [banInfo, setBanInfo] = useState(null);
-  const [cooldown, setCooldown] = useState(null);
   const [nowMs, setNowMs] = useState(Date.now());
-  const [onlineCount, setOnlineCount] = useState(0);
-  const [onlineWindowMinutes, setOnlineWindowMinutes] = useState(2);
   const [isModerationOpen, setIsModerationOpen] = useState(false);
   const [selectedProfile, setSelectedProfile] = useState(null);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const listRef = useRef(null);
   const lastSeenIdRef = useRef(0);
-  const pollTimerRef = useRef(null);
 
   const canWrite = Boolean(user?.id);
   const canOpenModeration = user?.role === 'owner' || user?.role === 'moderator';
+  const messagesQueryKey = useMemo(
+    () => globalChatQueryKeys.messages(GLOBAL_CHAT_MESSAGES_LIMIT),
+    []
+  );
+  const latestMessageQueryKey = useMemo(() => globalChatQueryKeys.latestMessage(), []);
+  const onlineQueryKey = useMemo(() => globalChatQueryKeys.online(), []);
+  const statusQueryKey = useMemo(() => globalChatQueryKeys.myStatus(), []);
+
+  const messagesQuery = useQuery({
+    queryKey: messagesQueryKey,
+    queryFn: () => fetchGlobalChatMessages(GLOBAL_CHAT_MESSAGES_LIMIT),
+    enabled: isOpen,
+    staleTime: 5000,
+    placeholderData: (previousData) => previousData ?? [],
+    retry: 1,
+    refetchInterval: (query) => {
+      if (!isOpen || !isDocumentVisible) return false;
+      return getAdaptiveRefetchInterval(12000, 60000)(query);
+    },
+    refetchIntervalInBackground: false,
+  });
+
+  const latestMessageQuery = useQuery({
+    queryKey: latestMessageQueryKey,
+    queryFn: fetchGlobalChatLatestMessage,
+    enabled: !isOpen,
+    staleTime: 15000,
+    retry: 1,
+    refetchInterval: (query) => {
+      if (isOpen || !isDocumentVisible) return false;
+      return getAdaptiveRefetchInterval(45000, 180000)(query);
+    },
+    refetchIntervalInBackground: false,
+  });
+
+  const onlineQuery = useQuery({
+    queryKey: onlineQueryKey,
+    queryFn: fetchGlobalChatOnline,
+    staleTime: 15000,
+    retry: 1,
+    refetchInterval: (query) => {
+      if (!isDocumentVisible) return false;
+      return isOpen
+        ? getAdaptiveRefetchInterval(20000, 120000)(query)
+        : getAdaptiveRefetchInterval(60000, 300000)(query);
+    },
+    refetchIntervalInBackground: false,
+  });
+
+  const statusQuery = useQuery({
+    queryKey: statusQueryKey,
+    queryFn: fetchGlobalChatStatus,
+    enabled: isOpen && canWrite,
+    staleTime: 10000,
+    retry: 1,
+    refetchInterval: (query) => {
+      if (!isOpen || !canWrite || !isDocumentVisible) return false;
+      return getAdaptiveRefetchInterval(20000, 120000)(query);
+    },
+    refetchIntervalInBackground: false,
+  });
+
+  const messages = messagesQuery.data ?? [];
+  const onlineCount = onlineQuery.data?.count ?? 0;
+  const onlineWindowMinutes = onlineQuery.data?.windowMinutes ?? 2;
+  const banInfo = statusQuery.data?.banInfo ?? null;
+  const cooldown = statusQuery.data?.cooldown ?? null;
+  const isLoading = messagesQuery.isLoading;
 
   const cooldownRemainingMs =
     cooldown && !cooldown.hasUnlimited && cooldown.resetAtMs
@@ -49,111 +124,146 @@ export default function GlobalChatWidget({ user }) {
       : 0;
   const isCooldownActive = cooldownRemainingMs > 0;
 
-  const fetchMessages = async (isSilent = false) => {
-    try {
-      if (!isSilent) setIsLoading(true);
-      const { data } = await api.get('/global-chat/messages?limit=80');
-      const nextMessages = data?.messages || [];
-      const prevLastId = lastSeenIdRef.current;
-      const nextLastId = nextMessages.length ? nextMessages[nextMessages.length - 1].id : 0;
-
-      setMessages(nextMessages);
-
-      if (!isOpen && nextLastId > prevLastId && prevLastId > 0) {
-        setUnreadCount((prev) => prev + 1);
-      }
-
-      if (nextLastId > 0) lastSeenIdRef.current = nextLastId;
-      setError('');
-    } catch (_error) {
-      if (!isSilent) setError('Не удалось загрузить глобальный чат');
-    } finally {
-      if (!isSilent) setIsLoading(false);
-    }
-  };
-
-  const fetchMyStatus = async () => {
-    if (!canWrite) {
-      setBanInfo(null);
-      setCooldown(null);
+  useEffect(() => {
+    const hasFetchError = Boolean(messagesQuery.error || onlineQuery.error || statusQuery.error);
+    if (hasFetchError) {
+      setError('Не удалось обновить глобальный чат');
       return;
     }
-    try {
-      const { data } = await api.get('/global-chat/me/status');
-      setBanInfo(data?.isBanned ? data?.ban || null : null);
-      setCooldown(data?.cooldown || null);
-    } catch (_error) {
-      setBanInfo(null);
-      setCooldown(null);
-    }
-  };
 
-  const fetchOnlineCount = async () => {
-    try {
-      const { data } = await api.get('/global-chat/online');
-      setOnlineCount(Number(data?.count) || 0);
-      const windowMinutes = Number(data?.windowMinutes);
-      if (Number.isFinite(windowMinutes)) {
-        setOnlineWindowMinutes(windowMinutes);
+    setError((currentError) =>
+      currentError === 'Не удалось обновить глобальный чат' ? '' : currentError
+    );
+  }, [messagesQuery.error, onlineQuery.error, statusQuery.error]);
+
+  useEffect(() => {
+    if (isOpen) {
+      setUnreadCount(0);
+      const lastMessageId = messages.length ? messages[messages.length - 1].id : 0;
+      if (lastMessageId > 0) {
+        lastSeenIdRef.current = lastMessageId;
       }
-    } catch (_error) {
-      setOnlineCount(0);
     }
-  };
+  }, [isOpen, messages]);
 
   useEffect(() => {
-    if (!isOpen) return undefined;
+    const latestMessageId = latestMessageQuery.data?.id || 0;
+    if (isOpen || latestMessageId === 0) return;
 
-    setUnreadCount(0);
-    fetchMessages();
-    fetchMyStatus();
-    fetchOnlineCount();
+    if (lastSeenIdRef.current > 0 && latestMessageId > lastSeenIdRef.current) {
+      setUnreadCount((prev) => prev + 1);
+    }
 
-    pollTimerRef.current = setInterval(() => {
-      fetchMessages(true);
-      fetchMyStatus();
-      fetchOnlineCount();
-    }, 3000);
-
-    return () => {
-      if (pollTimerRef.current) clearInterval(pollTimerRef.current);
-      pollTimerRef.current = null;
-    };
-  }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+    lastSeenIdRef.current = latestMessageId;
+  }, [isOpen, latestMessageQuery.data]);
 
   useEffect(() => {
-    fetchOnlineCount();
-    const timer = setInterval(() => {
-      fetchOnlineCount();
-    }, 5000);
-    return () => clearInterval(timer);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!isOpen || !listRef.current) return undefined;
 
-  // Прокрутка вниз при открытии чата
-  useEffect(() => {
-    if (!isOpen || !listRef.current) return;
     const container = listRef.current;
-    // Ждём рендер сообщений и скроллим вниз
-    setTimeout(() => {
+    const timer = window.setTimeout(() => {
       container.scrollTo({ top: container.scrollHeight, behavior: 'auto' });
     }, 200);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
   }, [isOpen]);
 
-  // Прокрутка вниз при новых сообщениях (только если пользователь внизу)
   useEffect(() => {
     if (!isOpen || !listRef.current) return;
+
     const container = listRef.current;
     const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 50;
     if (isAtBottom) {
       container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
     }
-  }, [messages]);
+  }, [isOpen, messages]);
 
   useEffect(() => {
-    if (!isOpen) return undefined;
-    const timer = setInterval(() => setNowMs(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, [isOpen]);
+    if (!isOpen || !isCooldownActive) return undefined;
+
+    const timer = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [isCooldownActive, isOpen]);
+
+  const sendMessageMutation = useMutation({
+    mutationFn: async (content) => {
+      const message = await sendGlobalChatMessage(content);
+      if (!message) {
+        throw new Error('Пустой ответ сервера');
+      }
+      return message;
+    },
+    onMutate: async (content) => {
+      setError('');
+      await queryClient.cancelQueries({ queryKey: messagesQueryKey });
+
+      const previousMessages = queryClient.getQueryData(messagesQueryKey) || [];
+      const tempId = `temp-${Date.now()}`;
+      const optimisticMessage = {
+        id: tempId,
+        userId: user.id,
+        userName: user.name || 'Вы',
+        userRole: user.role || 'user',
+        isVerified: user.isVerified ? 1 : 0,
+        content,
+        createdAtMs: Date.now(),
+        isPending: true,
+      };
+
+      queryClient.setQueryData(messagesQueryKey, [...previousMessages, optimisticMessage]);
+
+      return { previousMessages, tempId };
+    },
+    onSuccess: (realMessage, _content, context) => {
+      queryClient.setQueryData(messagesQueryKey, (current = []) =>
+        current.map((message) => (message.id === context.tempId ? realMessage : message))
+      );
+      queryClient.setQueryData(latestMessageQueryKey, realMessage);
+      lastSeenIdRef.current = Math.max(lastSeenIdRef.current, realMessage.id || 0);
+      queryClient.invalidateQueries({ queryKey: statusQueryKey });
+    },
+    onError: (requestError, _content, context) => {
+      queryClient.setQueryData(messagesQueryKey, context?.previousMessages || []);
+      setError(requestError?.response?.data?.error || 'Не удалось отправить сообщение');
+
+      if (requestError?.response?.data?.cooldown) {
+        queryClient.setQueryData(statusQueryKey, (previous) => ({
+          banInfo: previous?.banInfo || null,
+          cooldown: requestError.response.data.cooldown,
+        }));
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: messagesQueryKey });
+      queryClient.invalidateQueries({ queryKey: statusQueryKey });
+      queryClient.invalidateQueries({ queryKey: onlineQueryKey });
+    },
+  });
+
+  const deleteMessageMutation = useMutation({
+    mutationFn: deleteGlobalChatMessage,
+    onMutate: async (messageId) => {
+      setError('');
+      await queryClient.cancelQueries({ queryKey: messagesQueryKey });
+
+      const previousMessages = queryClient.getQueryData(messagesQueryKey) || [];
+      queryClient.setQueryData(messagesQueryKey, (current = []) =>
+        current.filter((message) => message.id !== messageId)
+      );
+
+      return { previousMessages };
+    },
+    onError: (_error, _messageId, context) => {
+      queryClient.setQueryData(messagesQueryKey, context?.previousMessages || []);
+      setError('Не удалось удалить сообщение');
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: messagesQueryKey });
+      queryClient.invalidateQueries({ queryKey: latestMessageQueryKey });
+    },
+  });
 
   const groupedMessages = useMemo(() => {
     const rows = [];
@@ -167,63 +277,31 @@ export default function GlobalChatWidget({ user }) {
       }
       rows.push({ type: 'message', ...message });
     }
+
     return rows;
   }, [messages]);
 
   const handleSend = async () => {
     const content = inputValue.trim();
-    if (!content || !canWrite || isSending || banInfo || isCooldownActive) return;
-
-    const tempId = `temp-${Date.now()}`;
-    const optimistic = {
-      id: tempId,
-      userId: user.id,
-      userName: user.name || 'Вы',
-      userRole: user.role || 'user',
-      isVerified: user.isVerified ? 1 : 0,
-      content,
-      createdAtMs: Date.now(),
-      isPending: true,
-    };
+    if (!content || !canWrite || sendMessageMutation.isPending || banInfo || isCooldownActive) return;
 
     setInputValue('');
-    setIsSending(true);
-    setMessages((prev) => [...prev, optimistic]);
-
-    try {
-      const { data } = await api.post('/global-chat/messages', { content });
-      const realMessage = data?.message;
-      if (!realMessage) throw new Error('Пустой ответ сервера');
-      setMessages((prev) => prev.map((m) => (m.id === tempId ? realMessage : m)));
-      lastSeenIdRef.current = Math.max(lastSeenIdRef.current, realMessage.id || 0);
-      setError('');
-      await fetchMyStatus();
-    } catch (requestError) {
-      setMessages((prev) => prev.filter((m) => m.id !== tempId));
-      const serverError = requestError?.response?.data?.error;
-      setError(serverError || 'Не удалось отправить сообщение');
-      if (requestError?.response?.data?.cooldown) {
-        setCooldown(requestError.response.data.cooldown);
-      }
-      await fetchMyStatus();
-    } finally {
-      setIsSending(false);
-    }
+    await sendMessageMutation.mutateAsync(content);
   };
 
-  const deleteMessage = async (messageId) => {
-    try {
-      await api.delete(`/global-chat/messages/${messageId}`);
-      setMessages((prev) => prev.filter((m) => m.id !== messageId));
-    } catch (_error) {
-      setError('Не удалось удалить сообщение');
-    }
+  const deleteMessage = (messageId) => {
+    deleteMessageMutation.mutate(messageId);
   };
 
   const openUserProfile = async (userId) => {
     try {
-      const { data } = await api.get(`/global-chat/users/${userId}/profile`);
-      setSelectedProfile(data?.profile || null);
+      const profile = await queryClient.fetchQuery({
+        queryKey: globalChatQueryKeys.userProfile(userId),
+        queryFn: () => fetchGlobalChatUserProfile(userId),
+        staleTime: 5 * 60 * 1000,
+      });
+      setError('');
+      setSelectedProfile(profile);
       setIsProfileOpen(true);
     } catch (_error) {
       setError('Не удалось открыть профиль пользователя');
@@ -330,7 +408,11 @@ export default function GlobalChatWidget({ user }) {
                         )}
                         <span className="time">{formatTime(row.createdAtMs)}</span>
                         {canDelete && !row.isPending && (
-                          <button className="message-delete-btn" onClick={() => deleteMessage(row.id)} title="Удалить сообщение">
+                          <button
+                            className="message-delete-btn"
+                            onClick={() => deleteMessage(row.id)}
+                            title="Удалить сообщение"
+                          >
                             <Trash2 size={12} />
                           </button>
                         )}
@@ -363,9 +445,13 @@ export default function GlobalChatWidget({ user }) {
                       onKeyDown={handleKeyDown}
                       rows={1}
                       placeholder="Написать в глобальный чат..."
-                      disabled={isSending}
+                      disabled={sendMessageMutation.isPending}
                     />
-                    <button className="global-chat-send" onClick={handleSend} disabled={!inputValue.trim() || isSending || isCooldownActive}>
+                    <button
+                      className="global-chat-send"
+                      onClick={handleSend}
+                      disabled={!inputValue.trim() || sendMessageMutation.isPending || isCooldownActive}
+                    >
                       <Send size={16} />
                     </button>
                   </>

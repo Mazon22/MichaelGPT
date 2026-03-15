@@ -146,12 +146,6 @@ async function initDatabase() {
      WHERE last_seen_at IS NULL`
   );
 
-  await run(
-    `UPDATE users
-     SET role = 'owner'
-     WHERE LOWER(name) = 'michael'
-       AND role <> 'owner'`
-  );
 }
 
 module.exports = {

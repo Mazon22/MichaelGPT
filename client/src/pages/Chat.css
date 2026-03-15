@@ -2256,7 +2256,7 @@
 .send-btn:hover:not(:disabled) {
   transform: translateY(-1px) scale(1.02);
 }
-`n
+
 .profile-modal {
   border: 1px solid rgba(78, 212, 201, 0.25);
   background: linear-gradient(165deg, rgba(16, 34, 44, 0.96), rgba(10, 22, 30, 0.96));
@@ -2280,6 +2280,258 @@
 
   .input-container {
     padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+}
+
+@media (max-width: 768px) {
+  .chat-container {
+    height: 100dvh;
+    min-height: 100dvh;
+  }
+
+  .sidebar {
+    width: min(88vw, 340px);
+    height: 100dvh;
+    max-width: 340px;
+    box-shadow: 18px 0 48px rgba(0, 0, 0, 0.42);
+  }
+
+  .main-content {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .chat-header {
+    gap: 12px;
+    padding: calc(10px + env(safe-area-inset-top)) 14px 12px;
+  }
+
+  .header-chat-title {
+    font-size: 15px;
+    line-height: 1.3;
+  }
+
+  .header-messages-count {
+    display: none;
+  }
+
+  .messages-container {
+    padding: 14px 14px 18px;
+    gap: 18px;
+  }
+
+  .message {
+    gap: 10px;
+    max-width: 100%;
+    margin-bottom: 8px;
+  }
+
+  .message-avatar {
+    padding-top: 2px;
+  }
+
+  .user-avatar-small,
+  .ai-avatar {
+    width: 34px;
+    height: 34px;
+  }
+
+  .message-content {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .message-header {
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+
+  .message-text {
+    font-size: 16px;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .message.user .message-text {
+    padding: 14px 16px !important;
+    border-radius: 18px !important;
+  }
+
+  .code-block-wrapper {
+    max-width: 100%;
+    margin: 10px 0;
+  }
+
+  .code-block-header {
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .copy-code-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .code-block-wrapper pre {
+    padding: 12px;
+    font-size: 13px;
+  }
+
+  .ai-quota-box {
+    margin-bottom: 12px;
+    padding: 12px 14px;
+  }
+
+  .ai-quota-top {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .input-container {
+    padding: 12px 12px calc(14px + env(safe-area-inset-bottom));
+  }
+
+  .input-wrapper {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: end;
+    padding: 12px;
+    border-radius: 22px;
+  }
+
+  .input-wrapper textarea {
+    grid-column: 1 / -1;
+    min-height: 52px;
+    max-height: 160px;
+    padding: 8px 8px 0;
+    font-size: 16px;
+    line-height: 1.45;
+  }
+
+  .response-mode-box {
+    grid-column: 1;
+    min-width: 0;
+  }
+
+  .response-mode-toggle {
+    width: 100%;
+    min-width: 0;
+    height: 48px;
+    justify-content: space-between;
+    padding: 0 14px;
+  }
+
+  .send-btn {
+    grid-column: 2;
+    width: 52px;
+    height: 52px;
+    border-radius: 16px;
+  }
+
+  .input-hint {
+    display: block;
+    left: auto;
+    transform: none;
+    width: 100%;
+    margin-top: 10px;
+    font-size: 11px;
+    line-height: 1.4;
+    text-align: center;
+  }
+
+  .update-modal {
+    width: calc(100% - 24px);
+    max-height: min(82dvh, 680px);
+  }
+
+  .update-modal-header,
+  .update-modal-content {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .sidebar {
+    width: min(92vw, 340px);
+  }
+
+  .chat-header {
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+
+  .messages-container {
+    padding: 12px 10px 16px;
+  }
+
+  .message {
+    gap: 8px;
+  }
+
+  .message-header {
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
+
+  .message.user .message-header {
+    justify-content: flex-start;
+  }
+
+  .message-text {
+    font-size: 15px;
+  }
+
+  .message.user .message-text {
+    padding: 12px 14px !important;
+  }
+
+  .code-block-header {
+    padding: 10px 12px;
+  }
+
+  .code-language {
+    font-size: 11px;
+  }
+
+  .copy-code-btn {
+    min-height: 38px;
+    font-size: 12px;
+  }
+
+  .input-container {
+    padding-left: 10px;
+    padding-right: 10px;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  }
+
+  .input-wrapper {
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .response-mode-toggle {
+    height: 46px;
+    padding: 0 12px;
+    font-size: 12px;
+  }
+
+  .send-btn {
+    width: 48px;
+    height: 48px;
+  }
+
+  .update-modal-header {
+    padding-top: 16px;
+    padding-bottom: 16px;
+  }
+
+  .update-modal-toggle-small span {
+    display: none;
   }
 }
 
@@ -2578,4 +2830,3 @@
 .update-modal-footer svg {
   color: #fbbf24;
 }
-
