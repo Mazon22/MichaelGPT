@@ -1,4 +1,8 @@
 const DEFAULT_CLIENT_ORIGINS = [
+  'https://michaelgpt.ru',
+  'https://www.michaelgpt.ru',
+  'http://michaelgpt.ru',
+  'http://www.michaelgpt.ru',
   'http://localhost:3000',
   'http://localhost:3001',
   'http://127.0.0.1:3000',
