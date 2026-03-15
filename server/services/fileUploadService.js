@@ -117,6 +117,17 @@ function truncateExtractedText(value) {
   };
 }
 
+function buildImageDataUrl(buffer, mimeType, extension) {
+  const normalizedMime =
+    String(mimeType || '').startsWith('image/')
+      ? mimeType
+      : extension === '.png'
+        ? 'image/png'
+        : 'image/jpeg';
+
+  return `data:${normalizedMime};base64,${buffer.toString('base64')}`;
+}
+
 async function extractPdfText(filePath) {
   const pdfParse = require('pdf-parse');
   const buffer = await fsp.readFile(filePath);
@@ -203,6 +214,10 @@ async function parseUploadedFile(file) {
     content: truncatedText.content,
     truncated: truncatedText.truncated,
     originalLength: truncatedText.originalLength,
+    imageDataUrl:
+      detectedType.kind === 'image'
+        ? buildImageDataUrl(buffer, file.mimetype, detectedType.extension)
+        : '',
   };
 }
 

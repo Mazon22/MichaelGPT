@@ -1,7 +1,10 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { FileText, X } from 'lucide-react';
+import { FileText, ImageIcon, X } from 'lucide-react';
+import { isImageAttachment } from '../utils/chatAttachments';
 
 export default function AttachmentPreviewModal({ attachment, onClose }) {
+  const isImage = attachment && isImageAttachment(attachment) && attachment.viewUrl;
+
   return (
     <AnimatePresence>
       {attachment && (
@@ -22,7 +25,7 @@ export default function AttachmentPreviewModal({ attachment, onClose }) {
             <header className="attachment-preview-header">
               <div>
                 <div className="attachment-preview-title">
-                  <FileText size={18} />
+                  {isImage ? <ImageIcon size={18} /> : <FileText size={18} />}
                   <strong>{attachment.filename}</strong>
                 </div>
                 <span>{attachment.mimeType || attachment.kind}</span>
@@ -32,8 +35,12 @@ export default function AttachmentPreviewModal({ attachment, onClose }) {
               </button>
             </header>
 
-            <div className="attachment-preview-content">
-              <pre>{attachment.content || 'Пустое содержимое'}</pre>
+            <div className={`attachment-preview-content ${isImage ? 'image' : ''}`}>
+              {isImage ? (
+                <img src={attachment.viewUrl} alt={attachment.filename} className="attachment-preview-image" />
+              ) : (
+                <pre>{attachment.content || 'Пустое содержимое'}</pre>
+              )}
             </div>
           </motion.section>
         </>

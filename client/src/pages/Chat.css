@@ -3288,3 +3288,108 @@ body.sidebar-mobile-open {
     right: 8px;
   }
 }
+
+/* Composer Attachments: ChatGPT-like chips */
+.chat-attachment-list.composer {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chat-attachment-card.composer {
+  flex: 0 1 min(320px, 100%);
+  width: min(320px, 100%);
+  min-height: 74px;
+  padding: 12px 42px 12px 12px;
+  gap: 10px;
+  border: 1px solid #d7dce4;
+  border-radius: 18px;
+  background: #f5f7fb;
+  box-shadow: none;
+}
+
+.chat-attachment-card.composer.interactive:hover,
+.chat-attachment-card.composer.interactive:focus-visible {
+  border-color: #c3cad6;
+  background: #ffffff;
+  transform: none;
+}
+
+.chat-attachment-card.composer .chat-attachment-main {
+  gap: 12px;
+  align-items: center;
+}
+
+.chat-attachment-card.composer .chat-attachment-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: #1677ff;
+  color: #ffffff;
+}
+
+.chat-attachment-card.composer.image .chat-attachment-icon {
+  background: #dbeafe;
+}
+
+.chat-attachment-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  border-radius: inherit;
+}
+
+.chat-attachment-card.composer .chat-attachment-copy strong {
+  color: #161b22;
+  font-size: 14px;
+  line-height: 1.25;
+}
+
+.chat-attachment-card.composer .chat-attachment-copy span {
+  color: #6b7280;
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.chat-attachment-card.composer .chat-attachment-progress {
+  height: 4px;
+  background: #dbe2ea;
+}
+
+.chat-attachment-remove {
+  background: #20242c;
+  color: #ffffff;
+}
+
+.chat-attachment-remove:hover {
+  background: #111418;
+}
+
+.chat-attachment-size {
+  margin-left: auto;
+  color: #8b8fa0;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.attachment-preview-content.image {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.attachment-preview-image {
+  max-width: 100%;
+  max-height: min(68vh, 720px);
+  border-radius: 16px;
+  display: block;
+}
+
+@media (max-width: 700px) {
+  .chat-attachment-card.composer {
+    width: 100%;
+    flex-basis: 100%;
+  }
+}

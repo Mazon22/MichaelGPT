@@ -2,17 +2,22 @@ import { AlertCircle, File, FileSpreadsheet, FileText, ImageIcon, Loader2, X } f
 import { formatFileSize, isImageAttachment } from '../utils/chatAttachments';
 
 function AttachmentIcon({ attachment }) {
+  if (attachment.viewUrl && isImageAttachment(attachment)) {
+    return <img className="chat-attachment-thumb" src={attachment.viewUrl} alt={attachment.filename} />;
+  }
+
   if (isImageAttachment(attachment)) return <ImageIcon size={16} />;
   if (attachment.kind === 'csv') return <FileSpreadsheet size={16} />;
   if (attachment.kind === 'pdf' || attachment.kind === 'docx' || attachment.kind === 'txt' || attachment.kind === 'json') {
     return <FileText size={16} />;
   }
+
   return <File size={16} />;
 }
 
 function getAttachmentSubtitle(attachment) {
   if (attachment.status === 'uploading') {
-    return `${formatFileSize(attachment.size)} · загрузка ${attachment.progress}%`;
+    return `Загрузка ${attachment.progress}%`;
   }
 
   if (attachment.status === 'error') {
@@ -47,16 +52,17 @@ export default function ChatAttachmentList({
   return (
     <div className={`chat-attachment-list ${variant}`}>
       {attachments.map((attachment) => {
-        const canOpen = Boolean(onOpen && attachment.viewUrl);
-        const canPreview = Boolean(onPreview && attachment.content);
         const isUploading = attachment.status === 'uploading';
         const isError = attachment.status === 'error';
+        const isImage = isImageAttachment(attachment);
+        const canOpen = Boolean(onOpen && attachment.viewUrl);
+        const canPreview = Boolean(onPreview && attachment.content);
         const isInteractive = !isUploading && !isError && (canOpen || canPreview);
 
         return (
           <article
             key={attachment.fingerprint || attachment.id}
-            className={`chat-attachment-card ${variant} ${isError ? 'error' : ''} ${isUploading ? 'uploading' : ''} ${isInteractive ? 'interactive' : ''}`}
+            className={`chat-attachment-card ${variant} ${isImage ? 'image' : ''} ${isError ? 'error' : ''} ${isUploading ? 'uploading' : ''} ${isInteractive ? 'interactive' : ''}`}
             onClick={isInteractive ? () => openAttachment(attachment) : undefined}
             onKeyDown={
               isInteractive
@@ -94,13 +100,16 @@ export default function ChatAttachmentList({
                 <strong>{attachment.filename}</strong>
                 <span>{getAttachmentSubtitle(attachment)}</span>
               </div>
+              {variant !== 'composer' && !isUploading ? (
+                <span className="chat-attachment-size">{formatFileSize(attachment.size)}</span>
+              ) : null}
             </div>
 
-            {isUploading && (
+            {isUploading ? (
               <div className="chat-attachment-progress">
                 <div style={{ width: `${attachment.progress}%` }} />
               </div>
-            )}
+            ) : null}
 
             {attachment.error ? (
               <div className="chat-attachment-error">

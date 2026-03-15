@@ -21,6 +21,8 @@ const {
 } = require('./services/fileUploadService');
 const {
   buildMessagePromptContent,
+  buildResponsesMessageInput,
+  historyHasVisionAttachments,
   mapMessageRow,
   normalizeAttachmentsInput,
   serializeAttachments,
@@ -31,6 +33,7 @@ const JWT_SECRET = process.env.JWT_SECRET;
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const GROQ_MODEL = process.env.GROQ_MODEL || 'meta-llama/llama-4-scout-17b-16e-instruct';
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
+const GROQ_RESPONSES_API_URL = 'https://api.groq.com/openai/v1/responses';
 const SYSTEM_PROMPT =
   '\u0422\u044b MichaelGPT - \u0443\u043c\u043d\u044b\u0439, \u0434\u0440\u0443\u0436\u0435\u043b\u044e\u0431\u043d\u044b\u0439 \u0438 \u043f\u043e\u043b\u0435\u0437\u043d\u044b\u0439 AI-\u0430\u0441\u0441\u0438\u0441\u0442\u0435\u043d\u0442. \u041e\u0442\u0432\u0435\u0447\u0430\u0439 \u043f\u043e\u0434\u0440\u043e\u0431\u043d\u043e \u0438 \u0438\u043d\u0444\u043e\u0440\u043c\u0430\u0442\u0438\u0432\u043d\u043e.';
 
@@ -202,38 +205,89 @@ async function getChatById(chatId, userId) {
   return db.get('SELECT * FROM chats WHERE id = ? AND user_id = ?', [chatId, userId]);
 }
 
+function getGroqHeaders() {
+  return {
+    Authorization: `Bearer ${GROQ_API_KEY}`,
+    'Content-Type': 'application/json',
+  };
+}
+
+function extractResponsesText(payload) {
+  if (typeof payload?.output_text === 'string' && payload.output_text.trim()) {
+    return payload.output_text.trim();
+  }
+
+  const outputItems = Array.isArray(payload?.output) ? payload.output : [];
+  const text = outputItems
+    .flatMap((item) => (Array.isArray(item?.content) ? item.content : []))
+    .filter((item) => item?.type === 'output_text' && typeof item.text === 'string')
+    .map((item) => item.text)
+    .join('\n')
+    .trim();
+
+  return text;
+}
+
+async function requestGroqChat(messages, responseMode = 'balanced') {
+  const modeInstruction = getModeInstruction(responseMode);
+  const modeSettings = getModeSettings(responseMode);
+  const response = await axios.post(
+    GROQ_API_URL,
+    {
+      model: GROQ_MODEL,
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'system', content: modeInstruction },
+        ...messages.map((message) => ({
+          role: message.role,
+          content: buildMessagePromptContent(message),
+        })),
+      ],
+      temperature: modeSettings.temperature,
+      max_tokens: modeSettings.maxTokens,
+    },
+    {
+      headers: getGroqHeaders(),
+      timeout: 45000,
+    }
+  );
+
+  return response?.data?.choices?.[0]?.message?.content;
+}
+
+async function requestGroqResponses(messages, responseMode = 'balanced') {
+  const modeInstruction = getModeInstruction(responseMode);
+  const modeSettings = getModeSettings(responseMode);
+  const response = await axios.post(
+    GROQ_RESPONSES_API_URL,
+    {
+      model: GROQ_MODEL,
+      instructions: `${SYSTEM_PROMPT}\n\n${modeInstruction}`,
+      input: messages.map(buildResponsesMessageInput),
+      temperature: modeSettings.temperature,
+      max_output_tokens: modeSettings.maxTokens,
+    },
+    {
+      headers: getGroqHeaders(),
+      timeout: 45000,
+    }
+  );
+
+  return extractResponsesText(response?.data);
+}
+
 async function requestGroq(messages, responseMode = 'balanced') {
   if (!GROQ_API_KEY) {
-    throw createError(500, 'GROQ_API_KEY РЅРµ Р·Р°РґР°РЅ');
+    throw createError(500, 'GROQ_API_KEY не задан');
   }
 
   try {
-    const modeInstruction = getModeInstruction(responseMode);
-    const modeSettings = getModeSettings(responseMode);
-    const response = await axios.post(
-      GROQ_API_URL,
-      {
-        model: GROQ_MODEL,
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'system', content: modeInstruction },
-          ...messages,
-        ],
-        temperature: modeSettings.temperature,
-        max_tokens: modeSettings.maxTokens,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${GROQ_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        timeout: 45000,
-      }
-    );
+    const content = historyHasVisionAttachments(messages)
+      ? await requestGroqResponses(messages, responseMode)
+      : await requestGroqChat(messages, responseMode);
 
-    const content = response?.data?.choices?.[0]?.message?.content;
     if (!content) {
-      throw createError(502, 'РџСѓСЃС‚РѕР№ РѕС‚РІРµС‚ РѕС‚ AI');
+      throw createError(502, 'Пустой ответ от AI');
     }
 
     return content;
@@ -241,10 +295,10 @@ async function requestGroq(messages, responseMode = 'balanced') {
     const details =
       error?.response?.data?.error?.message ||
       error?.response?.data?.message ||
-      error.message ||
-      'РќРµРёР·РІРµСЃС‚РЅР°СЏ РѕС€РёР±РєР°';
+      error?.message ||
+      'Неизвестная ошибка';
 
-    throw createError(502, 'РћС€РёР±РєР° РїРѕР»СѓС‡РµРЅРёСЏ РѕС‚РІРµС‚Р° РѕС‚ AI', details);
+    throw createError(502, 'Ошибка получения ответа от AI', details);
   }
 }
 
@@ -549,7 +603,8 @@ app.post(
     );
     const aiHistory = history.map((message) => ({
       role: message.role,
-      content: buildMessagePromptContent(message),
+      content: message.content,
+      attachmentsJson: message.attachmentsJson,
     }));
 
     const rawAiText = await requestGroq(aiHistory, responseMode);

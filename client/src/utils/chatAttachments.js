@@ -14,7 +14,7 @@ export function formatFileSize(bytes) {
 }
 
 export function isImageAttachment(attachment) {
-  return String(attachment?.mimeType || '').startsWith('image/');
+  return String(attachment?.mimeType || '').startsWith('image/') || attachment?.kind === 'image';
 }
 
 export function buildAttachmentPreview(content) {
@@ -41,11 +41,14 @@ export function createLocalUploadingAttachment(file) {
     status: 'uploading',
     progress: 0,
     error: '',
+    imageDataUrl: '',
     viewUrl,
   };
 }
 
 export function mergeUploadedAttachment(localAttachment, uploadedFile) {
+  const imageDataUrl = uploadedFile.imageDataUrl || localAttachment.imageDataUrl || '';
+
   return {
     ...localAttachment,
     id: uploadedFile.id || localAttachment.id,
@@ -60,6 +63,8 @@ export function mergeUploadedAttachment(localAttachment, uploadedFile) {
     status: 'ready',
     progress: 100,
     error: '',
+    imageDataUrl,
+    viewUrl: imageDataUrl || localAttachment.viewUrl || '',
   };
 }
 
@@ -73,10 +78,13 @@ export function serializeAttachmentForRequest(attachment) {
     content: attachment.content,
     truncated: attachment.truncated,
     originalLength: attachment.originalLength,
+    imageDataUrl: attachment.imageDataUrl || '',
   };
 }
 
 export function normalizeMessageAttachment(attachment) {
+  const imageDataUrl = attachment.imageDataUrl || '';
+
   return {
     id: attachment.id || attachment.filename,
     filename: attachment.filename,
@@ -90,6 +98,8 @@ export function normalizeMessageAttachment(attachment) {
     status: 'ready',
     progress: 100,
     error: '',
+    imageDataUrl,
+    viewUrl: imageDataUrl || attachment.viewUrl || '',
   };
 }
 
@@ -100,7 +110,7 @@ export function normalizeMessageAttachments(attachments) {
 
 export function revokeAttachmentUrls(attachments) {
   attachments.forEach((attachment) => {
-    if (attachment?.viewUrl) {
+    if (attachment?.viewUrl && attachment.viewUrl.startsWith('blob:')) {
       URL.revokeObjectURL(attachment.viewUrl);
     }
   });
