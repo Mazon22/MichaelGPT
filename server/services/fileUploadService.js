@@ -3,10 +3,6 @@ const fs = require('fs');
 const fsp = require('fs/promises');
 const path = require('path');
 const multer = require('multer');
-const pdfParse = require('pdf-parse');
-const mammoth = require('mammoth');
-const csvParser = require('csv-parser');
-const Tesseract = require('tesseract.js');
 
 const MAX_UPLOAD_FILE_SIZE = 10 * 1024 * 1024;
 const MAX_FILES_PER_UPLOAD = 5;
@@ -103,12 +99,14 @@ function truncateExtractedText(value) {
 }
 
 async function extractPdfText(filePath) {
+  const pdfParse = require('pdf-parse');
   const buffer = await fsp.readFile(filePath);
   const result = await pdfParse(buffer);
   return result?.text || '';
 }
 
 async function extractDocxText(filePath) {
+  const mammoth = require('mammoth');
   const result = await mammoth.extractRawText({ path: filePath });
   return result?.value || '';
 }
@@ -128,6 +126,7 @@ async function extractJsonText(filePath) {
 }
 
 async function extractCsvText(filePath) {
+  const csvParser = require('csv-parser');
   return new Promise((resolve, reject) => {
     const rows = [];
 
@@ -145,6 +144,7 @@ async function extractCsvText(filePath) {
 
 async function extractImageText(filePath) {
   try {
+    const Tesseract = require('tesseract.js');
     const result = await Tesseract.recognize(filePath, 'eng+rus');
     return result?.data?.text || '';
   } catch (_error) {
