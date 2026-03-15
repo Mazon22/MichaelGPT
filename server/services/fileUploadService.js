@@ -49,8 +49,27 @@ function ensureTempUploadDir() {
   fs.mkdirSync(TEMP_UPLOAD_DIR, { recursive: true });
 }
 
+function decodePossiblyMisencodedFileName(value) {
+  const raw = String(value || 'file');
+
+  try {
+    const decoded = Buffer.from(raw, 'latin1').toString('utf8');
+    const rawHasCyrillic = /[А-Яа-яЁё]/.test(raw);
+    const decodedHasCyrillic = /[А-Яа-яЁё]/.test(decoded);
+    const rawLooksBroken = /[ÐÑ]/.test(raw);
+
+    if (!decoded.includes('\uFFFD') && (rawLooksBroken || (!rawHasCyrillic && decodedHasCyrillic))) {
+      return decoded;
+    }
+  } catch (_error) {
+    return raw;
+  }
+
+  return raw;
+}
+
 function sanitizeFileName(value) {
-  return String(value || 'file')
+  return decodePossiblyMisencodedFileName(value)
     .replace(/[/\\?%*:|"<>]/g, '-')
     .replace(/\s+/g, ' ')
     .trim()
@@ -163,7 +182,8 @@ async function extractTextFromFile(file, detectedType) {
 }
 
 async function parseUploadedFile(file) {
-  const detectedType = detectSupportedFileType(file.originalname, file.mimetype);
+  const normalizedFileName = sanitizeFileName(file.originalname);
+  const detectedType = detectSupportedFileType(normalizedFileName, file.mimetype);
   if (!detectedType) {
     throw new Error('Unsupported file type');
   }
@@ -176,7 +196,7 @@ async function parseUploadedFile(file) {
   return {
     id: sha256.slice(0, 16),
     sha256,
-    filename: sanitizeFileName(file.originalname),
+    filename: normalizedFileName,
     mimeType: file.mimetype || 'application/octet-stream',
     size: file.size,
     kind: detectedType.kind,
@@ -203,7 +223,7 @@ const upload = multer({
     files: MAX_FILES_PER_UPLOAD,
   },
   fileFilter(_req, file, callback) {
-    const detectedType = detectSupportedFileType(file.originalname, file.mimetype);
+    const detectedType = detectSupportedFileType(sanitizeFileName(file.originalname), file.mimetype);
     if (!detectedType) {
       callback(new Error('Unsupported file type'));
       return;

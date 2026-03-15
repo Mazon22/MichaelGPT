@@ -1291,6 +1291,15 @@ export default function Chat() {
               className="attachment-input-hidden"
               onChange={handleAttachmentInputChange}
             />
+            <button
+              type="button"
+              className="attachment-picker-btn"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={!currentChat || isLoading || pendingAttachments.length >= MAX_CHAT_ATTACHMENTS}
+              title="Прикрепить файлы"
+            >
+              <Paperclip size={18} />
+            </button>
             <textarea
               ref={inputRef}
               value={inputValue}
@@ -1302,15 +1311,6 @@ export default function Chat() {
               rows={1}
               disabled={!currentChat || isLoading || aiQuotaReached}
             />
-            <button
-              type="button"
-              className="attachment-picker-btn"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={!currentChat || isLoading || pendingAttachments.length >= MAX_CHAT_ATTACHMENTS}
-              title="Прикрепить файлы"
-            >
-              <Paperclip size={18} />
-            </button>
             <div className="response-mode-box" ref={modeMenuRef}>
               <button
                 type="button"

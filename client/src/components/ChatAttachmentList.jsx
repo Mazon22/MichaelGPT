@@ -1,4 +1,4 @@
-import { AlertCircle, Eye, File, FileSpreadsheet, FileText, ImageIcon, Loader2, Trash2 } from 'lucide-react';
+import { AlertCircle, File, FileSpreadsheet, FileText, ImageIcon, Loader2, X } from 'lucide-react';
 import { formatFileSize, isImageAttachment } from '../utils/chatAttachments';
 
 function AttachmentIcon({ attachment }) {
@@ -10,6 +10,20 @@ function AttachmentIcon({ attachment }) {
   return <File size={16} />;
 }
 
+function getAttachmentSubtitle(attachment) {
+  if (attachment.status === 'uploading') {
+    return `${formatFileSize(attachment.size)} · загрузка ${attachment.progress}%`;
+  }
+
+  if (attachment.status === 'error') {
+    return 'Ошибка загрузки';
+  }
+
+  if (isImageAttachment(attachment)) return 'Изображение';
+  if (attachment.kind === 'csv') return 'Таблица';
+  return 'Документ';
+}
+
 export default function ChatAttachmentList({
   attachments,
   variant = 'composer',
@@ -19,6 +33,17 @@ export default function ChatAttachmentList({
 }) {
   if (!attachments.length) return null;
 
+  const openAttachment = (attachment) => {
+    if (attachment.viewUrl && onOpen) {
+      onOpen(attachment);
+      return;
+    }
+
+    if (attachment.content && onPreview) {
+      onPreview(attachment);
+    }
+  };
+
   return (
     <div className={`chat-attachment-list ${variant}`}>
       {attachments.map((attachment) => {
@@ -26,30 +51,50 @@ export default function ChatAttachmentList({
         const canPreview = Boolean(onPreview && attachment.content);
         const isUploading = attachment.status === 'uploading';
         const isError = attachment.status === 'error';
+        const isInteractive = !isUploading && !isError && (canOpen || canPreview);
 
         return (
           <article
             key={attachment.fingerprint || attachment.id}
-            className={`chat-attachment-card ${isError ? 'error' : ''} ${isUploading ? 'uploading' : ''}`}
+            className={`chat-attachment-card ${variant} ${isError ? 'error' : ''} ${isUploading ? 'uploading' : ''} ${isInteractive ? 'interactive' : ''}`}
+            onClick={isInteractive ? () => openAttachment(attachment) : undefined}
+            onKeyDown={
+              isInteractive
+                ? (event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      openAttachment(attachment);
+                    }
+                  }
+                : undefined
+            }
+            role={isInteractive ? 'button' : undefined}
+            tabIndex={isInteractive ? 0 : undefined}
           >
+            {variant === 'composer' && onRemove ? (
+              <button
+                type="button"
+                className="chat-attachment-remove"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onRemove(attachment.id);
+                }}
+                aria-label={`Удалить файл ${attachment.filename}`}
+                title="Удалить файл"
+              >
+                <X size={14} />
+              </button>
+            ) : null}
+
             <div className="chat-attachment-main">
               <span className="chat-attachment-icon">
                 {isUploading ? <Loader2 size={16} className="spin" /> : <AttachmentIcon attachment={attachment} />}
               </span>
               <div className="chat-attachment-copy">
                 <strong>{attachment.filename}</strong>
-                <span>
-                  {formatFileSize(attachment.size)}
-                  {attachment.status === 'ready' ? ' · готово' : ''}
-                  {isUploading ? ` · ${attachment.progress}%` : ''}
-                  {isError ? ' · ошибка' : ''}
-                </span>
+                <span>{getAttachmentSubtitle(attachment)}</span>
               </div>
             </div>
-
-            {attachment.previewText ? (
-              <p className="chat-attachment-preview">{attachment.previewText}</p>
-            ) : null}
 
             {isUploading && (
               <div className="chat-attachment-progress">
@@ -63,27 +108,6 @@ export default function ChatAttachmentList({
                 <span>{attachment.error}</span>
               </div>
             ) : null}
-
-            <div className="chat-attachment-actions">
-              {canOpen && (
-                <button type="button" className="attachment-action-btn" onClick={() => onOpen(attachment)}>
-                  <Eye size={14} />
-                  Открыть
-                </button>
-              )}
-              {canPreview && (
-                <button type="button" className="attachment-action-btn" onClick={() => onPreview(attachment)}>
-                  <FileText size={14} />
-                  Текст
-                </button>
-              )}
-              {variant === 'composer' && onRemove && (
-                <button type="button" className="attachment-action-btn danger" onClick={() => onRemove(attachment.id)}>
-                  <Trash2 size={14} />
-                  Удалить
-                </button>
-              )}
-            </div>
           </article>
         );
       })}

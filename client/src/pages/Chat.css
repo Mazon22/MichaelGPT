@@ -2873,6 +2873,29 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+  position: relative;
+}
+
+.chat-attachment-card.composer {
+  padding-right: 44px;
+}
+
+.chat-attachment-card.message {
+  padding: 10px 12px;
+  background: rgba(13, 23, 33, 0.76);
+}
+
+.chat-attachment-card.interactive {
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+}
+
+.chat-attachment-card.interactive:hover,
+.chat-attachment-card.interactive:focus-visible {
+  border-color: rgba(217, 70, 239, 0.42);
+  background: rgba(19, 31, 43, 0.92);
+  transform: translateY(-1px);
+  outline: none;
 }
 
 .chat-attachment-card.uploading {
@@ -2918,16 +2941,8 @@
 }
 
 .chat-attachment-copy span {
-  font-size: 11px;
-  color: #a99bc2;
-}
-
-.chat-attachment-preview {
-  margin: 0;
   font-size: 12px;
-  line-height: 1.55;
-  color: #d9ccef;
-  white-space: pre-wrap;
+  color: #a99bc2;
 }
 
 .chat-attachment-progress {
@@ -2951,10 +2966,27 @@
   font-size: 12px;
 }
 
-.chat-attachment-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+.chat-attachment-remove {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #d5c7ec;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+.chat-attachment-remove:hover {
+  background: rgba(255, 95, 132, 0.18);
+  color: #fff;
+  transform: scale(1.05);
 }
 
 .attachment-action-btn,
@@ -3215,6 +3247,10 @@ body.sidebar-mobile-open {
     padding: 10px;
   }
 
+  .chat-attachment-card.composer {
+    padding-right: 40px;
+  }
+
   .attachment-preview-modal {
     width: calc(100vw - 20px);
     max-height: min(80vh, 640px);
@@ -3247,12 +3283,8 @@ body.sidebar-mobile-open {
     height: 44px;
   }
 
-  .chat-attachment-actions {
-    flex-direction: column;
-  }
-
-  .attachment-action-btn {
-    width: 100%;
-    justify-content: center;
+  .chat-attachment-remove {
+    top: 8px;
+    right: 8px;
   }
 }
