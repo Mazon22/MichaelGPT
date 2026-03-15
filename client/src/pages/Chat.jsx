@@ -40,6 +40,11 @@ import {
   revokeAttachmentUrls,
   serializeAttachmentForRequest,
 } from '../utils/chatAttachments';
+import {
+  CURRENT_UPDATE_VERSION,
+  UPDATE_MODAL_DISABLE_KEY,
+  UPDATE_MODAL_SEEN_VERSION_KEY,
+} from '../utils/updateAnnouncements';
 
 const ProfileModal = lazy(() => import('./ProfileModal'));
 const UpdateModal = lazy(() => import('./UpdateModal'));
@@ -547,19 +552,16 @@ export default function Chat() {
   }, [isMobileViewport]);
 
   useEffect(() => {
-    const isDisabled = localStorage.getItem('michaelgpt_disable_updates');
+    const isDisabled = localStorage.getItem(UPDATE_MODAL_DISABLE_KEY);
     if (isDisabled) return undefined;
 
-    const lastSeen = localStorage.getItem('michaelgpt_last_update_seen');
+    const lastSeenVersion = localStorage.getItem(UPDATE_MODAL_SEEN_VERSION_KEY);
+    if (lastSeenVersion === CURRENT_UPDATE_VERSION) return undefined;
 
     scheduleTimeout(() => {
       if (!isMountedRef.current) return;
 
       setUpdateModalOpen(true);
-
-      if (!lastSeen) {
-        localStorage.setItem('michaelgpt_last_update_seen', new Date().toISOString());
-      }
     }, UPDATE_MODAL_DELAY_MS);
 
     return undefined;

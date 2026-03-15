@@ -1,63 +1,30 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Bug, Eye, EyeOff, Paperclip, Sparkles, Star, X } from 'lucide-react';
+import {
+  CURRENT_UPDATE_VERSION,
+  UPDATE_MODAL_DISABLE_KEY,
+  UPDATE_MODAL_SEEN_VERSION_KEY,
+  UPDATES,
+} from '../utils/updateAnnouncements';
 
-const UPDATES = [
-  {
-    date: '15.03.2026',
-    title: 'Файлы, изображения и стабильность',
-    icon: <Paperclip size={20} />,
-    changes: [
-      'Добавлена загрузка файлов прямо в чат: документы, таблицы, JSON и изображения.',
-      'Вложения в поле ввода стали компактнее и удобнее, ближе к привычному формату современных AI-чатов.',
-      'Изображения теперь корректно прикрепляются к сообщению и могут анализироваться AI.',
-      'Обновлён предпросмотр файлов: текст открывается во встроенном окне, изображения показываются отдельно.',
-      'Улучшена стабильность авторизации, отправки сообщений и работы чата после обновлений.',
-      'Исправлены проблемы с отображением русских названий файлов после загрузки.',
-    ],
-  },
-  {
-    date: '02.03.2026',
-    title: 'Глобальное обновление дизайна',
-    icon: <Sparkles size={20} />,
-    changes: [
-      'Полностью переработан дизайн чата: стеклянные панели с backdrop-blur и градиентами.',
-      'Анимированная нижняя панель: shimmer-эффекты и пульсирующая кнопка отправки.',
-      'Улучшенная боковая панель: градиентный логотип с пульсацией и мерцающий бейдж.',
-      'Эффект печати сообщений: текст появляется постепенно, как в ChatGPT.',
-      'Улучшенные сообщения: градиентные аватары и переливающийся ник нейросети.',
-      'Глобальный чат: обновлённый дизайн панели и кнопок.',
-      'Квота AI: анимированный прогресс-бар с вращающимся фоном.',
-      'Улучшенная форма профиля: аватар, имя и почта в едином стиле.',
-      'Dropdown-меню с вращающимся conic-градиентом.',
-      'Кастомные скроллбары с градиентной темой.',
-    ],
-  },
-  {
-    date: '26.02.2026',
-    title: 'Исправление ошибок и улучшение профиля',
-    icon: <Bug size={18} />,
-    changes: [
-      'Исправлен баг: опыт теперь сохраняется после удаления чатов.',
-      'Обновлён профиль: компактный вид с основной статистикой.',
-    ],
-  },
-];
-
-const STORAGE_KEY = 'michaelgpt_last_update_seen';
-const STORAGE_DISABLE_KEY = 'michaelgpt_disable_updates';
+const ICONS_BY_KEY = {
+  bug: <Bug size={18} />,
+  paperclip: <Paperclip size={20} />,
+  sparkles: <Sparkles size={20} />,
+};
 
 export default function UpdateModal({ isOpen, onClose }) {
   const [disableUpdates, setDisableUpdates] = useState(false);
 
   useEffect(() => {
-    const isDisabled = localStorage.getItem(STORAGE_DISABLE_KEY);
+    const isDisabled = localStorage.getItem(UPDATE_MODAL_DISABLE_KEY);
     setDisableUpdates(Boolean(isDisabled));
   }, []);
 
   useEffect(() => {
     if (isOpen) {
-      localStorage.setItem(STORAGE_KEY, new Date().toISOString());
+      localStorage.setItem(UPDATE_MODAL_SEEN_VERSION_KEY, CURRENT_UPDATE_VERSION);
     }
   }, [isOpen]);
 
@@ -66,9 +33,9 @@ export default function UpdateModal({ isOpen, onClose }) {
     setDisableUpdates(nextValue);
 
     if (nextValue) {
-      localStorage.setItem(STORAGE_DISABLE_KEY, 'true');
+      localStorage.setItem(UPDATE_MODAL_DISABLE_KEY, 'true');
     } else {
-      localStorage.removeItem(STORAGE_DISABLE_KEY);
+      localStorage.removeItem(UPDATE_MODAL_DISABLE_KEY);
     }
   };
 
@@ -124,7 +91,7 @@ export default function UpdateModal({ isOpen, onClose }) {
                   {UPDATES.map((update, index) => (
                     <div key={index} className="update-item">
                       <div className="update-item-header">
-                        <span className="update-item-icon">{update.icon}</span>
+                        <span className="update-item-icon">{ICONS_BY_KEY[update.icon] ?? <Sparkles size={20} />}</span>
                         <div className="update-item-info">
                           <span className="update-item-date">{update.date}</span>
                           <span className="update-item-title">{update.title}</span>
