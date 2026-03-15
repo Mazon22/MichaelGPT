@@ -13,6 +13,18 @@ const createGlobalChatRouter = require('./routes/globalChat');
 const createModerationRouter = require('./routes/moderation');
 const { getAiQuota } = require('./services/chatPolicies');
 const { BLOCKED_MESSAGE_RESPONSE, checkMessageContent } = require('./services/contentFilter');
+const {
+  MAX_FILES_PER_UPLOAD,
+  MAX_UPLOAD_FILE_SIZE,
+  processUploadedFiles,
+  upload,
+} = require('./services/fileUploadService');
+const {
+  buildMessagePromptContent,
+  mapMessageRow,
+  normalizeAttachmentsInput,
+  serializeAttachments,
+} = require('./services/messageAttachments');
 
 const PORT = Number(process.env.PORT || 5000);
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -156,6 +168,30 @@ function asyncHandler(handler) {
 
 function sanitizeText(value) {
   return typeof value === 'string' ? value.trim() : '';
+}
+
+function formatUploadError(error) {
+  if (!error) return null;
+  if (error.code === 'LIMIT_FILE_SIZE') {
+    return `Файл слишком большой. Максимальный размер: ${Math.round(MAX_UPLOAD_FILE_SIZE / 1024 / 1024)}MB`;
+  }
+  if (error.code === 'LIMIT_FILE_COUNT') {
+    return `Можно загрузить не более ${MAX_FILES_PER_UPLOAD} файлов за один раз`;
+  }
+  if (String(error.message || '').includes('Unsupported file type')) {
+    return 'Недопустимый тип файла. Разрешены PDF, TXT, DOCX, CSV, JSON, PNG, JPG';
+  }
+  return error.message || 'Ошибка загрузки файла';
+}
+
+function uploadFilesMiddleware(req, res, next) {
+  upload.array('files', MAX_FILES_PER_UPLOAD)(req, res, (error) => {
+    if (error) {
+      return next(createError(400, formatUploadError(error)));
+    }
+
+    return next();
+  });
 }
 
 function buildToken(user) {
@@ -343,6 +379,25 @@ app.post(
   })
 );
 
+app.post(
+  '/api/upload',
+  authMiddleware,
+  uploadFilesMiddleware,
+  asyncHandler(async (req, res) => {
+    const files = Array.isArray(req.files) ? req.files : [];
+    if (!files.length) {
+      throw createError(400, 'Нужно выбрать хотя бы один файл');
+    }
+
+    const parsedFiles = await processUploadedFiles(files);
+    if (!parsedFiles.length) {
+      throw createError(400, 'Не удалось обработать загруженные файлы');
+    }
+
+    return res.json({ files: parsedFiles });
+  })
+);
+
 app.get(
   '/api/chats',
   authMiddleware,
@@ -429,7 +484,8 @@ app.get(
       throw createError(404, 'Р§Р°С‚ РЅРµ РЅР°Р№РґРµРЅ');
     }
 
-    const messages = await db.all('SELECT * FROM messages WHERE chat_id = ? ORDER BY created_at ASC', [chatId]);
+    const messageRows = await db.all('SELECT * FROM messages WHERE chat_id = ? ORDER BY created_at ASC', [chatId]);
+    const messages = messageRows.map(mapMessageRow);
     return res.json({ messages });
   })
 );
@@ -441,12 +497,13 @@ app.post(
     const chatId = Number(req.params.id);
     const content = sanitizeText(req.body?.content);
     const responseMode = normalizeResponseMode(req.body?.responseMode);
+    const attachments = normalizeAttachmentsInput(req.body?.attachments);
 
     if (!Number.isInteger(chatId) || chatId <= 0) {
       throw createError(400, 'РќРµРєРѕСЂСЂРµРєС‚РЅС‹Р№ ID С‡Р°С‚Р°');
     }
 
-    if (!content) {
+    if (!content && attachments.length === 0) {
       throw createError(400, 'РЎРѕРѕР±С‰РµРЅРёРµ РЅРµ РјРѕР¶РµС‚ Р±С‹С‚СЊ РїСѓСЃС‚С‹Рј');
     }
 
@@ -469,12 +526,15 @@ app.post(
         quota,
       });
     }
-    const userInsert = await db.run('INSERT INTO messages (chat_id, role, content) VALUES (?, ?, ?)', [
+    const serializedAttachments = serializeAttachments(attachments);
+    const userInsert = await db.run('INSERT INTO messages (chat_id, role, content, attachments_json) VALUES (?, ?, ?, ?)', [
       chatId,
       'user',
       content,
+      serializedAttachments,
     ]);
-    const userMessage = await db.get('SELECT * FROM messages WHERE id = ?', [userInsert.lastID]);
+    const userMessageRow = await db.get('SELECT * FROM messages WHERE id = ?', [userInsert.lastID]);
+    const userMessage = mapMessageRow(userMessageRow);
 
     // Начисляем XP пользователю за сообщение
     await db.run('INSERT INTO user_xp_logs (user_id, xp_amount, source) VALUES (?, ?, ?)', [
@@ -484,11 +544,15 @@ app.post(
     ]);
 
     const history = await db.all(
-      'SELECT role, content FROM messages WHERE chat_id = ? ORDER BY created_at ASC',
+      'SELECT role, content, attachments_json AS attachmentsJson FROM messages WHERE chat_id = ? ORDER BY created_at ASC',
       [chatId]
     );
+    const aiHistory = history.map((message) => ({
+      role: message.role,
+      content: buildMessagePromptContent(message),
+    }));
 
-    const rawAiText = await requestGroq(history, responseMode);
+    const rawAiText = await requestGroq(aiHistory, responseMode);
     let aiText = enforceModeOutput(rawAiText, responseMode);
     const isCasualGreeting = isCasualGreetingPrompt(content);
     if (responseMode === 'deep' && isDeepTooShort(aiText)) {
@@ -502,7 +566,7 @@ app.post(
           ].join(' ');
 
       aiText = await requestGroq(
-        [...history, { role: 'assistant', content: aiText }, { role: 'user', content: expansionPrompt }],
+        [...aiHistory, { role: 'assistant', content: aiText }, { role: 'user', content: expansionPrompt }],
         'deep'
       );
     }
@@ -515,17 +579,19 @@ app.post(
             'Нужно 2-4 предложения по делу, можно добавить короткое уточнение или полезный следующий шаг.',
           ].join(' ');
       aiText = await requestGroq(
-        [...history, { role: 'assistant', content: aiText }, { role: 'user', content: expansionPrompt }],
+        [...aiHistory, { role: 'assistant', content: aiText }, { role: 'user', content: expansionPrompt }],
         'balanced'
       );
     }
 
-    const aiInsert = await db.run('INSERT INTO messages (chat_id, role, content) VALUES (?, ?, ?)', [
+    const aiInsert = await db.run('INSERT INTO messages (chat_id, role, content, attachments_json) VALUES (?, ?, ?, ?)', [
       chatId,
       'assistant',
       aiText,
+      null,
     ]);
-    const aiMessage = await db.get('SELECT * FROM messages WHERE id = ?', [aiInsert.lastID]);
+    const aiMessageRow = await db.get('SELECT * FROM messages WHERE id = ?', [aiInsert.lastID]);
+    const aiMessage = mapMessageRow(aiMessageRow);
 
     await db.run('UPDATE chats SET updated_at = CURRENT_TIMESTAMP WHERE id = ?', [chatId]);
 

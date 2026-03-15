@@ -19,6 +19,21 @@ export const chatService = {
   sendMessage(chatId, payload) {
     return api.post(`/chats/${chatId}/messages`, payload);
   },
+  uploadFile(file, onProgress) {
+    const formData = new FormData();
+    formData.append('files', file);
+
+    return api.post('/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+      onUploadProgress(event) {
+        if (!onProgress || !event.total) return;
+        const progress = Math.round((event.loaded / event.total) * 100);
+        onProgress(progress);
+      },
+    });
+  },
   getAiQuota() {
     return api.get('/ai/status');
   },

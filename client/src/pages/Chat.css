@@ -2831,6 +2831,255 @@
   color: #fbbf24;
 }
 
+.attachment-input-hidden {
+  display: none;
+}
+
+.attachment-upload-error {
+  max-width: 900px;
+  margin: 0 auto 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 95, 132, 0.3);
+  background: rgba(255, 95, 132, 0.12);
+  color: #ffd4df;
+  font-size: 13px;
+}
+
+.input-container.drag-over .input-wrapper {
+  border-color: rgba(78, 212, 201, 0.75);
+  box-shadow: 0 0 0 3px rgba(31, 178, 166, 0.14), 0 16px 36px rgba(0, 0, 0, 0.3);
+}
+
+.chat-attachment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto 10px;
+}
+
+.chat-attachment-list.message {
+  margin: 0 0 12px;
+  max-width: 100%;
+}
+
+.chat-attachment-card {
+  border: 1px solid rgba(217, 70, 239, 0.22);
+  background: rgba(12, 24, 34, 0.84);
+  border-radius: 16px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.chat-attachment-card.uploading {
+  border-color: rgba(78, 212, 201, 0.32);
+}
+
+.chat-attachment-card.error {
+  border-color: rgba(255, 95, 132, 0.32);
+}
+
+.chat-attachment-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.chat-attachment-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(217, 70, 239, 0.18), rgba(34, 211, 238, 0.14));
+  color: #f3dbff;
+  flex-shrink: 0;
+}
+
+.chat-attachment-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.chat-attachment-copy strong {
+  font-size: 13px;
+  color: #f7ebff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chat-attachment-copy span {
+  font-size: 11px;
+  color: #a99bc2;
+}
+
+.chat-attachment-preview {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: #d9ccef;
+  white-space: pre-wrap;
+}
+
+.chat-attachment-progress {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+.chat-attachment-progress div {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #d946ef, #22d3ee);
+}
+
+.chat-attachment-error {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #ffd2db;
+  font-size: 12px;
+}
+
+.chat-attachment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.attachment-action-btn,
+.attachment-picker-btn {
+  border: 1px solid rgba(217, 70, 239, 0.28);
+  background: rgba(255, 255, 255, 0.04);
+  color: #f4e9ff;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.attachment-action-btn {
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+.attachment-picker-btn {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+}
+
+.attachment-action-btn:hover,
+.attachment-picker-btn:hover:not(:disabled) {
+  border-color: rgba(217, 70, 239, 0.48);
+  background: rgba(217, 70, 239, 0.12);
+  color: #fff;
+}
+
+.attachment-action-btn.danger:hover {
+  border-color: rgba(255, 95, 132, 0.4);
+  background: rgba(255, 95, 132, 0.14);
+}
+
+.attachment-picker-btn:disabled,
+.attachment-action-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.spin {
+  animation: attachment-spin 0.9s linear infinite;
+}
+
+@keyframes attachment-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.attachment-preview-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 4, 16, 0.72);
+  backdrop-filter: blur(6px);
+  z-index: 320;
+}
+
+.attachment-preview-modal {
+  position: fixed;
+  inset: 50% auto auto 50%;
+  transform: translate(-50%, -50%);
+  width: min(720px, calc(100vw - 32px));
+  max-height: min(78vh, 760px);
+  display: flex;
+  flex-direction: column;
+  border-radius: 20px;
+  border: 1px solid rgba(217, 70, 239, 0.24);
+  background: linear-gradient(165deg, rgba(24, 14, 52, 0.96), rgba(14, 10, 34, 0.96));
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  z-index: 321;
+  overflow: hidden;
+}
+
+.attachment-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px;
+  border-bottom: 1px solid rgba(217, 70, 239, 0.18);
+}
+
+.attachment-preview-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #f7ebff;
+}
+
+.attachment-preview-header span {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: #b9a6d6;
+}
+
+.attachment-preview-close {
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #ead9ff;
+}
+
+.attachment-preview-content {
+  overflow: auto;
+  padding: 18px;
+}
+
+.attachment-preview-content pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #f2e7ff;
+}
+
 body.sidebar-mobile-open {
   overflow: hidden;
 }
@@ -2919,6 +3168,7 @@ body.sidebar-mobile-open {
     gap: 8px;
     padding: 10px;
     border-radius: 18px;
+    grid-template-columns: auto minmax(0, 1fr) auto;
   }
 
   .input-wrapper textarea {
@@ -2928,21 +3178,46 @@ body.sidebar-mobile-open {
     padding: 6px 6px 0;
   }
 
+  .attachment-picker-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+  }
+
+  .attachment-picker-btn {
+    grid-column: 1;
+  }
+
   .response-mode-toggle {
     height: 44px;
     border-radius: 14px;
     padding: 0 12px;
   }
 
+  .response-mode-box {
+    grid-column: 2;
+  }
+
   .send-btn {
     width: 46px;
     height: 46px;
     border-radius: 14px;
+    grid-column: 3;
   }
 
   .input-hint {
     margin-top: 6px;
     font-size: 10px;
+  }
+
+  .chat-attachment-card {
+    border-radius: 14px;
+    padding: 10px;
+  }
+
+  .attachment-preview-modal {
+    width: calc(100vw - 20px);
+    max-height: min(80vh, 640px);
   }
 }
 
@@ -2970,5 +3245,14 @@ body.sidebar-mobile-open {
   .send-btn {
     width: 44px;
     height: 44px;
+  }
+
+  .chat-attachment-actions {
+    flex-direction: column;
+  }
+
+  .attachment-action-btn {
+    width: 100%;
+    justify-content: center;
   }
 }

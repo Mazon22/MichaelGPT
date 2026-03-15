@@ -22,10 +22,24 @@ import {
   ChevronDown,
   X,
   Bell,
+  Paperclip,
 } from 'lucide-react';
 import './Chat.css';
 import { copyToClipboard } from '../utils/copyToClipboard';
 import { BLOCKED_MESSAGE_WARNING, checkMessageContent } from '../utils/contentFilter';
+import AttachmentPreviewModal from '../components/AttachmentPreviewModal';
+import ChatAttachmentList from '../components/ChatAttachmentList';
+import {
+  CHAT_FILE_ACCEPT,
+  MAX_CHAT_ATTACHMENTS,
+  MAX_CHAT_FILE_SIZE,
+  createLocalUploadingAttachment,
+  createAttachmentFingerprint,
+  mergeUploadedAttachment,
+  normalizeMessageAttachments,
+  revokeAttachmentUrls,
+  serializeAttachmentForRequest,
+} from '../utils/chatAttachments';
 
 const ProfileModal = lazy(() => import('./ProfileModal'));
 const UpdateModal = lazy(() => import('./UpdateModal'));
@@ -52,8 +66,21 @@ function formatMessageTime(value) {
   return new Date(normalized).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
 }
 
-const Message = memo(function Message({ message, index, copiedId, copyMessage, copiedCodeKey, copyCode, currentUser, streamingContent }) {
+const Message = memo(function Message({
+  message,
+  index,
+  copiedId,
+  copyMessage,
+  copiedCodeKey,
+  copyCode,
+  currentUser,
+  streamingContent,
+  onPreviewAttachment,
+  onOpenAttachment,
+}) {
   const displayContent = streamingContent !== undefined ? streamingContent : message.content;
+  const attachments = normalizeMessageAttachments(message.attachments);
+  const hasTextContent = Boolean(String(displayContent || '').trim());
   
   return (
     <motion.div
@@ -87,7 +114,15 @@ const Message = memo(function Message({ message, index, copiedId, copyMessage, c
           </span>
         </div>
         <div className="message-text">
-          {message.role === 'assistant' ? (
+          {attachments.length > 0 && (
+            <ChatAttachmentList
+              attachments={attachments}
+              variant="message"
+              onPreview={onPreviewAttachment}
+              onOpen={onOpenAttachment}
+            />
+          )}
+          {hasTextContent && (message.role === 'assistant' ? (
             <ReactMarkdown
               components={{
                 code({ node, inline, className, children, ...props }) {
@@ -140,7 +175,7 @@ const Message = memo(function Message({ message, index, copiedId, copyMessage, c
             </ReactMarkdown>
           ) : (
             displayContent
-          )}
+          ))}
         </div>
         {streamingContent === undefined && (
           <div className="message-actions">
@@ -183,15 +218,21 @@ export default function Chat() {
   const [responseMode, setResponseMode] = useState('balanced');
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const [isComposerFocused, setIsComposerFocused] = useState(false);
+  const [pendingAttachments, setPendingAttachments] = useState([]);
+  const [attachmentPreview, setAttachmentPreview] = useState(null);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [fileUploadError, setFileUploadError] = useState('');
   const [aiQuota, setAiQuota] = useState(null);
   const [quotaNowMs, setQuotaNowMs] = useState(Date.now());
   const [streamingMessage, setStreamingMessage] = useState(null);
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const inputRef = useRef(null);
+  const fileInputRef = useRef(null);
   const userMenuRef = useRef(null);
   const modeMenuRef = useRef(null);
   const profileModalRef = useRef(null);
+  const pendingAttachmentsRef = useRef([]);
   const currentChatIdRef = useRef(null);
   const messagesRequestSeqRef = useRef(0);
   const backgroundRef = useRef(null);
@@ -244,8 +285,13 @@ export default function Chat() {
       isMountedRef.current = false;
       streamSessionRef.current += 1;
       clearScheduledTimeouts();
+      revokeAttachmentUrls(pendingAttachmentsRef.current);
     };
   }, [clearScheduledTimeouts]);
+
+  useEffect(() => {
+    pendingAttachmentsRef.current = pendingAttachments;
+  }, [pendingAttachments]);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia('(max-width: 768px)');
@@ -331,6 +377,11 @@ export default function Chat() {
   useEffect(() => {
     stopStreaming();
     setMessages([]);
+    setFileUploadError('');
+    setPendingAttachments((prev) => {
+      revokeAttachmentUrls(prev);
+      return [];
+    });
 
     if (currentChat?.id) {
       loadMessages(currentChat.id);
@@ -390,6 +441,109 @@ export default function Chat() {
   const openUpdateModal = useCallback(() => {
     setUpdateModalOpen(true);
   }, []);
+
+  const updatePendingAttachment = useCallback((attachmentId, updater) => {
+    setPendingAttachments((prev) =>
+      prev.map((attachment) =>
+        attachment.id === attachmentId ? { ...attachment, ...updater(attachment) } : attachment
+      )
+    );
+  }, []);
+
+  const removePendingAttachment = useCallback((attachmentId) => {
+    setPendingAttachments((prev) => {
+      const target = prev.find((attachment) => attachment.id === attachmentId);
+      if (target) {
+        revokeAttachmentUrls([target]);
+      }
+
+      return prev.filter((attachment) => attachment.id !== attachmentId);
+    });
+  }, []);
+
+  const openAttachmentPreview = useCallback((attachment) => {
+    setAttachmentPreview(attachment);
+  }, []);
+
+  const openAttachmentSource = useCallback((attachment) => {
+    if (attachment?.viewUrl) {
+      window.open(attachment.viewUrl, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
+    if (attachment?.content) {
+      setAttachmentPreview(attachment);
+    }
+  }, []);
+
+  const uploadFiles = useCallback(async (incomingFiles) => {
+    const files = Array.from(incomingFiles || []);
+    if (!files.length) return;
+
+    const existing = pendingAttachmentsRef.current;
+    const remainingSlots = Math.max(0, MAX_CHAT_ATTACHMENTS - existing.length);
+    const fingerprints = new Set(existing.map((attachment) => attachment.fingerprint || attachment.id));
+    const acceptedEntries = [];
+    const rejectedMessages = [];
+
+    files.slice(0, remainingSlots).forEach((file) => {
+      const fingerprint = createAttachmentFingerprint(file);
+      if (fingerprints.has(fingerprint)) {
+        rejectedMessages.push(`Файл "${file.name}" уже добавлен`);
+        return;
+      }
+      if (file.size > MAX_CHAT_FILE_SIZE) {
+        rejectedMessages.push(`Файл "${file.name}" превышает лимит 10MB`);
+        return;
+      }
+
+      const localAttachment = createLocalUploadingAttachment(file);
+      acceptedEntries.push({ file, localAttachment });
+      fingerprints.add(fingerprint);
+    });
+
+    if (files.length > remainingSlots) {
+      rejectedMessages.push(`Можно прикрепить не более ${MAX_CHAT_ATTACHMENTS} файлов`);
+    }
+
+    if (!acceptedEntries.length) {
+      setFileUploadError(rejectedMessages[0] || 'Не удалось добавить файлы');
+      return;
+    }
+
+    setFileUploadError(rejectedMessages[0] || '');
+    setPendingAttachments((prev) => [...prev, ...acceptedEntries.map((entry) => entry.localAttachment)]);
+
+    for (const entry of acceptedEntries) {
+      try {
+        const { data } = await chatService.uploadFile(entry.file, (progress) => {
+          updatePendingAttachment(entry.localAttachment.id, () => ({ progress }));
+        });
+        const uploadedFile = data?.files?.[0];
+
+        if (!uploadedFile) {
+          throw new Error('Пустой ответ сервера');
+        }
+
+        updatePendingAttachment(entry.localAttachment.id, (attachment) =>
+          mergeUploadedAttachment(attachment, uploadedFile)
+        );
+      } catch (error) {
+        updatePendingAttachment(entry.localAttachment.id, () => ({
+          status: 'error',
+          progress: 0,
+          error:
+            error?.response?.data?.error ||
+            error?.message ||
+            'Не удалось обработать файл',
+        }));
+      }
+    }
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  }, [updatePendingAttachment]);
 
   useEffect(() => {
     if (!isMobileViewport) {
@@ -542,14 +696,19 @@ export default function Chat() {
 
   const sendMessage = useCallback(async () => {
     const content = inputValue.trim();
+    const readyAttachments = pendingAttachments.filter((attachment) => attachment.status === 'ready');
+    const uploadingAttachments = pendingAttachments.some((attachment) => attachment.status === 'uploading');
     const aiQuotaReached =
       aiQuota && !aiQuota.hasUnlimited && Number(aiQuota.remaining) <= 0;
 
-    if (!content || !currentChat || isLoading || aiQuotaReached) return;
+    if ((!content && readyAttachments.length === 0) || !currentChat || isLoading || aiQuotaReached || uploadingAttachments) {
+      return;
+    }
 
     const nowIso = new Date().toISOString();
     const activeChatId = currentChat.id;
     const localId = createLocalMessageId('local-user');
+    const attachmentPayload = readyAttachments.map(serializeAttachmentForRequest);
     const wasFirstPersistedMessage = !messages.some((message) => {
       const messageId = Number(message.id);
       return Number.isInteger(messageId) && messageId > 0 && !message.isLocalOnly;
@@ -562,6 +721,7 @@ export default function Chat() {
       content,
       created_at: nowIso,
       isPending: true,
+      attachments: readyAttachments,
     };
 
     const makeAssistantMessage = (text, options = {}) => ({
@@ -582,6 +742,9 @@ export default function Chat() {
 
     if (checkMessageContent(content)) {
       setInputValue('');
+      setPendingAttachments((prev) => {
+        return prev.filter((attachment) => attachment.status !== 'ready');
+      });
 
       flushSync(() => {
         setMessages((prev) => [
@@ -592,6 +755,7 @@ export default function Chat() {
             content,
             created_at: nowIso,
             isLocalOnly: true,
+            attachments: readyAttachments,
           },
           makeAssistantMessage(BLOCKED_MESSAGE_WARNING, {
             idPrefix: 'local-blocked-warning',
@@ -609,6 +773,9 @@ export default function Chat() {
     streamSessionRef.current = streamSessionId;
 
     setInputValue('');
+    setPendingAttachments((prev) => {
+      return prev.filter((attachment) => attachment.status !== 'ready');
+    });
 
     flushSync(() => {
       setMessages((prev) => [...prev, userMessage]);
@@ -624,6 +791,7 @@ export default function Chat() {
       const { data } = await chatService.sendMessage(activeChatId, {
         content,
         responseMode,
+        attachments: attachmentPayload,
       });
 
       if (!isMountedRef.current || currentChatIdRef.current !== activeChatId) return;
@@ -633,7 +801,7 @@ export default function Chat() {
       setMessages((prev) => {
         const replaced = prev.map((message) =>
           message.localId === localId
-            ? { ...data.userMessage, localId, isPending: false }
+            ? { ...data.userMessage, localId, isPending: false, attachments: normalizeMessageAttachments(data.userMessage?.attachments) }
             : message
         );
         const hasAiMessage = replaced.some((message) => message.id === aiMessage.id);
@@ -644,6 +812,7 @@ export default function Chat() {
 
         return [...replaced, { ...aiMessage, isStreaming: true }];
       });
+      revokeAttachmentUrls(readyAttachments);
 
       const words = aiMessage.content.split(/(?=\s+)/);
       let currentContent = '';
@@ -681,7 +850,8 @@ export default function Chat() {
       setStreamingMessage(null);
 
       if (wasFirstPersistedMessage) {
-        const newTitle = `${content.slice(0, 30)}${content.length > 30 ? '...' : ''}`;
+        const titleSeed = content || readyAttachments[0]?.filename || 'Новый чат';
+        const newTitle = `${titleSeed.slice(0, 30)}${titleSeed.length > 30 ? '...' : ''}`;
         const { data: chatData } = await chatService.updateChat(activeChatId, newTitle);
 
         if (isMountedRef.current && currentChatIdRef.current === activeChatId) {
@@ -696,6 +866,7 @@ export default function Chat() {
       await loadAiQuota();
     } catch (error) {
       if (isMountedRef.current && currentChatIdRef.current === activeChatId) {
+        setPendingAttachments((prev) => [...readyAttachments, ...prev]);
         const errText = getErrorText(error);
         const isRateLimit = errText.includes('Rate limit') || errText.includes('rate_limit');
         const isBlocked = error?.response?.data?.blocked === true;
@@ -707,7 +878,7 @@ export default function Chat() {
 
         setMessages((prev) => {
           const nextMessages = prev.map((message) =>
-            message.localId === localId ? { ...message, isPending: false, isError: true } : message
+            message.localId === localId ? { ...message, isPending: false, isError: true, attachments: readyAttachments } : message
           );
 
           return [
@@ -729,7 +900,7 @@ export default function Chat() {
         setIsLoading(false);
       }
     }
-  }, [aiQuota, currentChat, inputValue, isLoading, loadAiQuota, messages, responseMode, waitForDelay]);
+  }, [aiQuota, currentChat, inputValue, isLoading, loadAiQuota, messages, pendingAttachments, responseMode, waitForDelay]);
 
   const copyMessage = useCallback(async (content, id) => {
     try {
@@ -757,6 +928,26 @@ export default function Chat() {
       sendMessage();
     }
   }, [sendMessage]);
+
+  const handleAttachmentInputChange = useCallback((event) => {
+    uploadFiles(event.target.files);
+  }, [uploadFiles]);
+
+  const handleDragOver = useCallback((event) => {
+    event.preventDefault();
+    setIsDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback((event) => {
+    if (event.currentTarget.contains(event.relatedTarget)) return;
+    setIsDragOver(false);
+  }, []);
+
+  const handleDrop = useCallback((event) => {
+    event.preventDefault();
+    setIsDragOver(false);
+    uploadFiles(event.dataTransfer.files);
+  }, [uploadFiles]);
 
   const msgsLength = messages.length;
   const aiQuotaReached =
@@ -788,10 +979,12 @@ export default function Chat() {
             copyCode={copyCode}
             currentUser={user}
             streamingContent={streamingContent}
+            onPreviewAttachment={openAttachmentPreview}
+            onOpenAttachment={openAttachmentSource}
           />
         );
       }),
-    [messages, copiedId, copyMessage, copiedCodeKey, copyCode, streamingMessage, user]
+    [messages, copiedId, copyMessage, copiedCodeKey, copyCode, streamingMessage, user, openAttachmentPreview, openAttachmentSource]
   );
   const selectedModeLabel = modeOptions.find((item) => item.value === responseMode)?.label || 'Стандарт';
 
@@ -1058,7 +1251,12 @@ export default function Chat() {
           )}
         </div>
 
-        <div className="input-container">
+        <div
+          className={`input-container ${isDragOver ? 'drag-over' : ''}`}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
           {aiQuota && !aiQuota.hasUnlimited && (
             <div className="ai-quota-box">
               <div className="ai-quota-top">
@@ -1076,7 +1274,23 @@ export default function Chat() {
               </div>
             </div>
           )}
+          {fileUploadError ? <div className="attachment-upload-error">{fileUploadError}</div> : null}
+          <ChatAttachmentList
+            attachments={pendingAttachments}
+            variant="composer"
+            onRemove={removePendingAttachment}
+            onPreview={openAttachmentPreview}
+            onOpen={openAttachmentSource}
+          />
           <div className="input-wrapper">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={CHAT_FILE_ACCEPT}
+              multiple
+              className="attachment-input-hidden"
+              onChange={handleAttachmentInputChange}
+            />
             <textarea
               ref={inputRef}
               value={inputValue}
@@ -1088,6 +1302,15 @@ export default function Chat() {
               rows={1}
               disabled={!currentChat || isLoading || aiQuotaReached}
             />
+            <button
+              type="button"
+              className="attachment-picker-btn"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={!currentChat || isLoading || pendingAttachments.length >= MAX_CHAT_ATTACHMENTS}
+              title="Прикрепить файлы"
+            >
+              <Paperclip size={18} />
+            </button>
             <div className="response-mode-box" ref={modeMenuRef}>
               <button
                 type="button"
@@ -1129,7 +1352,11 @@ export default function Chat() {
               className="btn btn-primary send-btn"
               onClick={sendMessage}
               disabled={
-                !inputValue.trim() || !currentChat || isLoading || aiQuotaReached
+                (!inputValue.trim() && !pendingAttachments.some((attachment) => attachment.status === 'ready')) ||
+                !currentChat ||
+                isLoading ||
+                aiQuotaReached ||
+                pendingAttachments.some((attachment) => attachment.status === 'uploading')
               }
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -1166,6 +1393,11 @@ export default function Chat() {
       <Suspense fallback={null}>
         <GlobalChatWidget user={user} suppressFloatingTrigger={isMobileViewport && isComposerFocused} />
       </Suspense>
+
+      <AttachmentPreviewModal
+        attachment={attachmentPreview}
+        onClose={() => setAttachmentPreview(null)}
+      />
     </div>
   );
 }

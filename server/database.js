@@ -78,6 +78,7 @@ async function initDatabase() {
       chat_id INTEGER NOT NULL,
       role TEXT NOT NULL,
       content TEXT NOT NULL,
+      attachments_json TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (chat_id) REFERENCES chats(id) ON DELETE CASCADE
     );
@@ -140,6 +141,7 @@ async function initDatabase() {
   await safeExec(`ALTER TABLE users ADD COLUMN is_verified INTEGER NOT NULL DEFAULT 0;`);
   await safeExec(`ALTER TABLE users ADD COLUMN last_seen_at DATETIME;`);
   await safeExec(`ALTER TABLE users ADD COLUMN avatar_url TEXT;`);
+  await safeExec(`ALTER TABLE messages ADD COLUMN attachments_json TEXT;`);
   await run(
     `UPDATE users
      SET last_seen_at = CURRENT_TIMESTAMP
