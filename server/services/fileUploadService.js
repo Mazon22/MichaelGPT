@@ -9,6 +9,46 @@ const MAX_FILES_PER_UPLOAD = 5;
 const MAX_FILE_TEXT_CHARS = 8000;
 const TEMP_UPLOAD_DIR = path.join(__dirname, '..', '.tmp_uploads');
 
+const CODE_FILE_EXTENSIONS = new Set([
+  '.js', '.jsx', '.ts', '.tsx', '.py', '.java', '.c', '.cpp', '.cc', '.cxx',
+  '.h', '.hpp', '.cs', '.php', '.rb', '.go', '.rs', '.swift', '.kt', '.kts',
+  '.scala', '.sh', '.bash', '.zsh', '.ps1', '.sql', '.html', '.htm', '.css',
+  '.scss', '.sass', '.less', '.xml', '.yml', '.yaml', '.toml', '.ini', '.cfg',
+  '.conf', '.env', '.md', '.vue', '.svelte', '.astro',
+]);
+
+const CODE_FILE_MIME_TYPES = new Set([
+  'text/plain',
+  'text/markdown',
+  'text/x-python',
+  'text/x-java-source',
+  'text/x-c',
+  'text/x-c++src',
+  'text/x-csharp',
+  'text/x-php',
+  'text/x-ruby',
+  'text/x-go',
+  'text/x-rustsrc',
+  'text/x-swift',
+  'text/x-kotlin',
+  'text/x-scala',
+  'text/x-shellscript',
+  'text/x-script.python',
+  'text/html',
+  'text/css',
+  'text/xml',
+  'application/javascript',
+  'application/x-javascript',
+  'application/json',
+  'application/xml',
+  'application/x-sh',
+  'application/x-httpd-php',
+  'application/x-yaml',
+  'application/yaml',
+  'application/toml',
+  'application/octet-stream',
+]);
+
 const SUPPORTED_FILE_TYPES = {
   pdf: {
     label: 'PDF',
@@ -37,6 +77,11 @@ const SUPPORTED_FILE_TYPES = {
     label: 'JSON',
     extensions: new Set(['.json']),
     mimeTypes: new Set(['application/json', 'text/json', 'text/plain']),
+  },
+  code: {
+    label: 'Code',
+    extensions: CODE_FILE_EXTENSIONS,
+    mimeTypes: CODE_FILE_MIME_TYPES,
   },
   image: {
     label: 'Image',
@@ -141,7 +186,7 @@ async function extractDocxText(filePath) {
   return result?.value || '';
 }
 
-async function extractTxtText(filePath) {
+async function extractUtf8Text(filePath) {
   return fsp.readFile(filePath, 'utf8');
 }
 
@@ -185,9 +230,10 @@ async function extractImageText(filePath) {
 async function extractTextFromFile(file, detectedType) {
   if (detectedType.kind === 'pdf') return extractPdfText(file.path);
   if (detectedType.kind === 'docx') return extractDocxText(file.path);
-  if (detectedType.kind === 'txt') return extractTxtText(file.path);
+  if (detectedType.kind === 'txt') return extractUtf8Text(file.path);
   if (detectedType.kind === 'json') return extractJsonText(file.path);
   if (detectedType.kind === 'csv') return extractCsvText(file.path);
+  if (detectedType.kind === 'code') return extractUtf8Text(file.path);
   if (detectedType.kind === 'image') return extractImageText(file.path);
   return '';
 }

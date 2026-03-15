@@ -2840,9 +2840,9 @@
   margin: 0 auto 10px;
   padding: 10px 12px;
   border-radius: 14px;
-  border: 1px solid rgba(255, 95, 132, 0.3);
-  background: rgba(255, 95, 132, 0.12);
-  color: #ffd4df;
+  border: 1px solid #f0b7c1;
+  background: #fff2f4;
+  color: #a61b35;
   font-size: 13px;
 }
 
@@ -2905,6 +2905,25 @@
 
 .chat-attachment-card.error {
   border-color: rgba(255, 95, 132, 0.32);
+}
+
+.chat-attachment-card.composer.error {
+  border-color: #f0b7c1;
+  background: #fff3f5;
+}
+
+.chat-attachment-card.composer.error .chat-attachment-icon {
+  background: #fee2e2;
+  color: #b42318;
+}
+
+.chat-attachment-card.composer.error .chat-attachment-copy strong {
+  color: #7a1024;
+}
+
+.chat-attachment-card.composer.error .chat-attachment-copy span,
+.chat-attachment-card.composer.error .chat-attachment-error {
+  color: #b42318;
 }
 
 .chat-attachment-main {

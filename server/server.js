@@ -182,7 +182,7 @@ function formatUploadError(error) {
     return `Можно загрузить не более ${MAX_FILES_PER_UPLOAD} файлов за один раз`;
   }
   if (String(error.message || '').includes('Unsupported file type')) {
-    return 'Недопустимый тип файла. Разрешены PDF, TXT, DOCX, CSV, JSON, PNG, JPG';
+    return 'Недопустимый тип файла. Разрешены документы, изображения и файлы кода: PDF, TXT, DOCX, CSV, JSON, PNG, JPG, JS, TS, PY, JAVA, C, C++, C#, PHP, GO, SQL, HTML, CSS, XML, YAML и другие текстовые исходники';
   }
   return error.message || 'Ошибка загрузки файла';
 }

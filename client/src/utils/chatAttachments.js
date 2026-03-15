@@ -1,4 +1,58 @@
-export const CHAT_FILE_ACCEPT = '.pdf,.txt,.docx,.csv,.json,.png,.jpg,.jpeg';
+export const CHAT_FILE_ACCEPT = [
+  '.pdf',
+  '.txt',
+  '.md',
+  '.docx',
+  '.csv',
+  '.json',
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.js',
+  '.jsx',
+  '.ts',
+  '.tsx',
+  '.py',
+  '.java',
+  '.c',
+  '.cpp',
+  '.cc',
+  '.cxx',
+  '.h',
+  '.hpp',
+  '.cs',
+  '.php',
+  '.rb',
+  '.go',
+  '.rs',
+  '.swift',
+  '.kt',
+  '.kts',
+  '.scala',
+  '.sh',
+  '.bash',
+  '.zsh',
+  '.ps1',
+  '.sql',
+  '.html',
+  '.htm',
+  '.css',
+  '.scss',
+  '.sass',
+  '.less',
+  '.xml',
+  '.yml',
+  '.yaml',
+  '.toml',
+  '.ini',
+  '.cfg',
+  '.conf',
+  '.env',
+  '.vue',
+  '.svelte',
+  '.astro',
+].join(',');
+
 export const MAX_CHAT_ATTACHMENTS = 5;
 export const MAX_CHAT_FILE_SIZE = 10 * 1024 * 1024;
 
@@ -20,6 +74,7 @@ export function isImageAttachment(attachment) {
 export function getAttachmentTypeLabel(attachment) {
   if (isImageAttachment(attachment)) return 'Изображение';
   if (attachment?.kind === 'csv') return 'Таблица';
+  if (attachment?.kind === 'code') return 'Код';
   return 'Документ';
 }
 
