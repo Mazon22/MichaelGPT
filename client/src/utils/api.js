@@ -13,15 +13,12 @@ const API_URL = rawApiUrl.endsWith('/api') ? rawApiUrl : `${rawApiUrl}/api`;
 const shouldLogRequests = import.meta.env.DEV;
 let isRedirectingAfterAuthError = false;
 
-const publicRoutes = new Set([
-  '/auth/login',
-  '/auth/register',
-  '/global-chat/messages',
-  '/global-chat/online',
-]);
-
-const publicRouteMatchers = [
-  /^\/global-chat\/users\/\d+\/profile$/,
+const publicRouteRules = [
+  { method: 'post', path: '/auth/login' },
+  { method: 'post', path: '/auth/register' },
+  { method: 'get', path: '/global-chat/messages' },
+  { method: 'get', path: '/global-chat/online' },
+  { method: 'get', matcher: /^\/global-chat\/users\/\d+\/profile$/ },
 ];
 
 function normalizeUrlPath(url = '') {
@@ -35,9 +32,15 @@ function normalizeUrlPath(url = '') {
 function shouldAttachAuthHeader(config) {
   if (config.skipAuth) return false;
 
+  const method = String(config.method || 'get').toLowerCase();
   const path = normalizeUrlPath(config.url);
-  if (publicRoutes.has(path)) return false;
-  return !publicRouteMatchers.some((matcher) => matcher.test(path));
+  const isPublicRoute = publicRouteRules.some((rule) => {
+    if (rule.method !== method) return false;
+    if (rule.path) return rule.path === path;
+    return rule.matcher.test(path);
+  });
+
+  return !isPublicRoute;
 }
 
 const api = axios.create({
@@ -50,7 +53,11 @@ const api = axios.create({
 
 api.interceptors.request.use((config) => {
   const token = getStoredToken();
-  if (token && shouldAttachAuthHeader(config)) {
+  const requiresAuth = shouldAttachAuthHeader(config);
+
+  config.requiresAuth = requiresAuth;
+
+  if (token && requiresAuth) {
     config.headers.Authorization = `Bearer ${token}`;
   }
   if (shouldLogRequests) {
@@ -71,7 +78,7 @@ api.interceptors.response.use(
       console.error('API Error:', error.message, error.response?.data);
     }
 
-    if (error.response?.status === 401) {
+    if (error.response?.status === 401 && error.config?.requiresAuth) {
       clearStoredToken();
 
       const isAuthPage = window.location.pathname === '/login' || window.location.pathname === '/register';
