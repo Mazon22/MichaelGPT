@@ -164,12 +164,13 @@ const Message = memo(function Message({ message, index, copiedId, copyMessage, c
 
 export default function Chat() {
   const { user, logout, updateUser } = useAuth();
+  const [isMobileViewport, setIsMobileViewport] = useState(() => window.innerWidth <= 768);
   const [chats, setChats] = useState([]);
   const [currentChat, setCurrentChat] = useState(null);
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth > 768);
   const [editingChatId, setEditingChatId] = useState(null);
   const [editTitle, setEditTitle] = useState('');
   const [copiedId, setCopiedId] = useState(null);
@@ -237,6 +238,39 @@ export default function Chat() {
       clearScheduledTimeouts();
     };
   }, [clearScheduledTimeouts]);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(max-width: 768px)');
+
+    const applyViewportState = (matches) => {
+      setIsMobileViewport(matches);
+      setSidebarOpen((prev) => (matches ? false : prev || true));
+    };
+
+    applyViewportState(mediaQuery.matches);
+
+    const handleChange = (event) => {
+      applyViewportState(event.matches);
+    };
+
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', handleChange);
+      return () => mediaQuery.removeEventListener('change', handleChange);
+    }
+
+    mediaQuery.addListener(handleChange);
+    return () => mediaQuery.removeListener(handleChange);
+  }, []);
+
+  useEffect(() => {
+    if (!isMobileViewport || !sidebarOpen) {
+      document.body.classList.remove('sidebar-mobile-open');
+      return undefined;
+    }
+
+    document.body.classList.add('sidebar-mobile-open');
+    return () => document.body.classList.remove('sidebar-mobile-open');
+  }, [isMobileViewport, sidebarOpen]);
 
   useEffect(() => {
     currentChatIdRef.current = currentChat?.id ?? null;
@@ -414,12 +448,15 @@ export default function Chat() {
       setChats((prev) => [data.chat, ...prev]);
       setCurrentChat(data.chat);
       setMessages([]);
+      if (isMobileViewport) {
+        setSidebarOpen(false);
+      }
       setUserMenuOpen(false);
       requestAnimationFrame(() => inputRef.current?.focus());
     } catch (error) {
       console.error('Ошибка создания чата:', error);
     }
-  }, []);
+  }, [isMobileViewport]);
 
   const deleteChat = useCallback(
     async (chatId, event) => {
@@ -469,6 +506,13 @@ export default function Chat() {
     setEditingChatId(null);
     setEditTitle('');
   }, []);
+
+  const selectChat = useCallback((chat) => {
+    setCurrentChat(chat);
+    if (isMobileViewport) {
+      setSidebarOpen(false);
+    }
+  }, [isMobileViewport]);
 
   const formatHms = (seconds) => {
     const s = Math.max(0, Number(seconds) || 0);
@@ -755,14 +799,27 @@ export default function Chat() {
       {/* Sidebar */}
       <AnimatePresence>
         {sidebarOpen && (
-          <motion.aside
-            initial={{ width: 0, opacity: 0 }}
-            animate={{ width: 300, opacity: 1 }}
-            exit={{ width: 0, opacity: 0 }}
-            transition={{ duration: 0.14, ease: 'easeOut' }}
-            style={{ overflow: 'hidden' }}
-            className={`sidebar ${sidebarOpen ? 'open' : ''}`}
-          >
+          <>
+            {isMobileViewport && (
+              <motion.button
+                type="button"
+                className="sidebar-mobile-backdrop"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.16, ease: 'easeOut' }}
+                onClick={() => setSidebarOpen(false)}
+                aria-label="Закрыть боковую панель"
+              />
+            )}
+            <motion.aside
+              initial={isMobileViewport ? { x: '-100%', opacity: 1 } : { width: 0, opacity: 0 }}
+              animate={isMobileViewport ? { x: 0, opacity: 1 } : { width: 300, opacity: 1 }}
+              exit={isMobileViewport ? { x: '-100%', opacity: 1 } : { width: 0, opacity: 0 }}
+              transition={{ duration: 0.18, ease: 'easeOut' }}
+              style={{ overflow: 'hidden' }}
+              className={`sidebar ${sidebarOpen ? 'open' : ''} ${isMobileViewport ? 'mobile-drawer' : ''}`}
+            >
             <div className="sidebar-header">
               <div className="logo">
                 <div className="logo-icon">
@@ -771,6 +828,16 @@ export default function Chat() {
                 <span className="logo-text">MichaelGPT</span>
                 <span className="logo-badge">beta test</span>
               </div>
+              {isMobileViewport && (
+                <button
+                  type="button"
+                  className="sidebar-mobile-close"
+                  onClick={() => setSidebarOpen(false)}
+                  aria-label="Закрыть меню"
+                >
+                  <X size={18} />
+                </button>
+              )}
             </div>
 
             <button className="btn btn-primary new-chat-btn" onClick={createNewChat}>
@@ -785,7 +852,7 @@ export default function Chat() {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   className={`chat-item ${currentChat?.id === chat.id ? 'active' : ''}`}
-                  onClick={() => setCurrentChat(chat)}
+                  onClick={() => selectChat(chat)}
                 >
                   {editingChatId === chat.id ? (
                     <div className="chat-edit-mode" onClick={(e) => e.stopPropagation()}>
@@ -894,7 +961,8 @@ export default function Chat() {
                 </div>
               </div>
             </div>
-          </motion.aside>
+            </motion.aside>
+          </>
         )}
       </AnimatePresence>
 
