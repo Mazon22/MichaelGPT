@@ -93,10 +93,12 @@ function buildPromptAttachmentBlock(attachments) {
       ];
 
       if (isImageAttachment(attachment)) {
-        lines.push('Image attached for visual analysis.');
+        lines.push('Image attached.');
         if (attachment.content) {
           lines.push('Extracted text from image:');
           lines.push(attachment.content);
+        } else {
+          lines.push('No extracted text was available, so answer using the user message and any non-image files only.');
         }
       } else {
         lines.push('Content:');

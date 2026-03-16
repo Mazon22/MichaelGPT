@@ -29,8 +29,6 @@ const {
 } = require("./services/fileUploadService");
 const {
   buildMessagePromptContent,
-  buildResponsesMessageInput,
-  historyHasVisionAttachments,
   mapMessageRow,
   normalizeAttachmentsInput,
   serializeAttachments,
@@ -38,11 +36,13 @@ const {
 
 const PORT = Number(process.env.PORT || 5000);
 const JWT_SECRET = process.env.JWT_SECRET;
-const GROQ_API_KEY = process.env.GROQ_API_KEY;
-const GROQ_MODEL =
-  process.env.GROQ_MODEL || "meta-llama/llama-4-scout-17b-16e-instruct";
-const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
-const GROQ_RESPONSES_API_URL = "https://api.groq.com/openai/v1/responses";
+const OLLAMA_BASE_URL = String(
+  process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434",
+).replace(/\/+$/, "");
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "llama3.1:8b";
+const OLLAMA_KEEP_ALIVE = process.env.OLLAMA_KEEP_ALIVE || "30m";
+const OLLAMA_CHAT_API_URL = `${OLLAMA_BASE_URL}/api/chat`;
+const OLLAMA_TAGS_API_URL = `${OLLAMA_BASE_URL}/api/tags`;
 const CLIENT_DIST_PATH = path.resolve(__dirname, "../client/dist");
 const CLIENT_INDEX_PATH = path.join(CLIENT_DIST_PATH, "index.html");
 const SYSTEM_PROMPT =
@@ -160,9 +160,9 @@ const hasClientBuild = fs.existsSync(CLIENT_INDEX_PATH);
 
 app.set("trust proxy", 1);
 
-if (!GROQ_API_KEY) {
+if (!OLLAMA_BASE_URL) {
   console.warn(
-    "Warning: GROQ_API_KEY is not set — AI requests will fail until it is provided.",
+    "Warning: OLLAMA_BASE_URL is empty — AI requests will fail until it is configured.",
   );
 }
 
@@ -237,102 +237,84 @@ async function getChatById(chatId, userId) {
   ]);
 }
 
-function getGroqHeaders() {
-  return {
-    Authorization: `Bearer ${GROQ_API_KEY}`,
-    "Content-Type": "application/json",
-  };
+function buildOllamaMessages(messages, responseMode) {
+  return [
+    { role: "system", content: SYSTEM_PROMPT },
+    { role: "system", content: getModeInstruction(responseMode) },
+    ...messages.map((message) => ({
+      role: message.role === "assistant" ? "assistant" : "user",
+      content: buildMessagePromptContent(message),
+    })),
+  ];
 }
 
-function extractResponsesText(payload) {
-  if (typeof payload?.output_text === "string" && payload.output_text.trim()) {
-    return payload.output_text.trim();
+function formatOllamaError(error) {
+  if (error?.response?.data?.error) {
+    return String(error.response.data.error);
   }
-
-  const outputItems = Array.isArray(payload?.output) ? payload.output : [];
-  const text = outputItems
-    .flatMap((item) => (Array.isArray(item?.content) ? item.content : []))
-    .filter(
-      (item) => item?.type === "output_text" && typeof item.text === "string",
-    )
-    .map((item) => item.text)
-    .join("\n")
-    .trim();
-
-  return text;
-}
-
-async function requestGroqChat(messages, responseMode = "balanced") {
-  const modeInstruction = getModeInstruction(responseMode);
-  const modeSettings = getModeSettings(responseMode);
-  const response = await axios.post(
-    GROQ_API_URL,
-    {
-      model: GROQ_MODEL,
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "system", content: modeInstruction },
-        ...messages.map((message) => ({
-          role: message.role,
-          content: buildMessagePromptContent(message),
-        })),
-      ],
-      temperature: modeSettings.temperature,
-      max_tokens: modeSettings.maxTokens,
-    },
-    {
-      headers: getGroqHeaders(),
-      timeout: 45000,
-    },
-  );
-
-  return response?.data?.choices?.[0]?.message?.content;
-}
-
-async function requestGroqResponses(messages, responseMode = "balanced") {
-  const modeInstruction = getModeInstruction(responseMode);
-  const modeSettings = getModeSettings(responseMode);
-  const response = await axios.post(
-    GROQ_RESPONSES_API_URL,
-    {
-      model: GROQ_MODEL,
-      instructions: `${SYSTEM_PROMPT}\n\n${modeInstruction}`,
-      input: messages.map(buildResponsesMessageInput),
-      temperature: modeSettings.temperature,
-      max_output_tokens: modeSettings.maxTokens,
-    },
-    {
-      headers: getGroqHeaders(),
-      timeout: 45000,
-    },
-  );
-
-  return extractResponsesText(response?.data);
-}
-
-async function requestGroq(messages, responseMode = "balanced") {
-  if (!GROQ_API_KEY) {
-    throw createError(502, "GROQ_API_KEY не задан — AI недоступен");
+  if (error?.response?.data?.message) {
+    return String(error.response.data.message);
   }
+  if (error?.code === "ECONNREFUSED") {
+    return `Не удалось подключиться к Ollama по адресу ${OLLAMA_BASE_URL}. Проверьте, что Ollama запущена.`;
+  }
+  if (error?.code === "ECONNABORTED") {
+    return "Ollama отвечает слишком долго. Попробуйте меньшую модель или повторите запрос.";
+  }
+  return error?.message || "Неизвестная ошибка Ollama";
+}
+
+async function requestOllama(messages, responseMode = "balanced") {
+  const modeSettings = getModeSettings(responseMode);
 
   try {
-    const content = historyHasVisionAttachments(messages)
-      ? await requestGroqResponses(messages, responseMode)
-      : await requestGroqChat(messages, responseMode);
+    const response = await axios.post(
+      OLLAMA_CHAT_API_URL,
+      {
+        model: OLLAMA_MODEL,
+        messages: buildOllamaMessages(messages, responseMode),
+        stream: false,
+        keep_alive: OLLAMA_KEEP_ALIVE,
+        options: {
+          temperature: modeSettings.temperature,
+          num_predict: modeSettings.maxTokens,
+        },
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
+        },
+        timeout: 180000,
+      },
+    );
 
+    const content = String(response?.data?.message?.content || "").trim();
     if (!content) {
-      throw createError(502, "Пустой ответ от AI");
+      throw createError(502, "Пустой ответ от Ollama");
     }
 
     return content;
   } catch (error) {
-    const details =
-      error?.response?.data?.error?.message ||
-      error?.response?.data?.message ||
-      error?.message ||
-      "Неизвестная ошибка";
+    throw createError(502, "Ошибка получения ответа от AI", formatOllamaError(error));
+  }
+}
 
-    throw createError(502, "Ошибка получения ответа от AI", details);
+async function probeOllama() {
+  try {
+    const response = await axios.get(OLLAMA_TAGS_API_URL, { timeout: 5000 });
+    const models = Array.isArray(response?.data?.models) ? response.data.models : [];
+    const hasConfiguredModel = models.some((model) => model?.name === OLLAMA_MODEL);
+
+    if (hasConfiguredModel) {
+      console.log(`Ollama is reachable. Model ready: ${OLLAMA_MODEL}`);
+      return;
+    }
+
+    console.warn(
+      `Ollama is reachable, but model "${OLLAMA_MODEL}" is not installed yet. Run "ollama pull ${OLLAMA_MODEL}".`,
+    );
+  } catch (error) {
+    console.warn(`Ollama probe failed: ${formatOllamaError(error)}`);
   }
 }
 
@@ -436,7 +418,7 @@ app.post(
 app.get(
   "/api/health",
   asyncHandler(async (_req, res) => {
-    return res.json({ ok: true });
+    return res.json({ ok: true, aiProvider: "ollama", model: OLLAMA_MODEL });
   }),
 );
 app.get(
@@ -677,7 +659,7 @@ app.post(
       attachmentsJson: message.attachmentsJson,
     }));
 
-    const rawAiText = await requestGroq(aiHistory, responseMode);
+    const rawAiText = await requestOllama(aiHistory, responseMode);
     let aiText = enforceModeOutput(rawAiText, responseMode);
     const isCasualGreeting = isCasualGreetingPrompt(content);
     if (responseMode === "deep" && isDeepTooShort(aiText)) {
@@ -690,7 +672,7 @@ app.post(
             'Не описывай "прошлый ответ" и не используй шаблонные секции ради секций.',
           ].join(" ");
 
-      aiText = await requestGroq(
+      aiText = await requestOllama(
         [
           ...aiHistory,
           { role: "assistant", content: aiText },
@@ -707,7 +689,7 @@ app.post(
             "Сделай стандартный ответ: не слишком коротко и не слишком длинно.",
             "Нужно 2-4 предложения по делу, можно добавить короткое уточнение или полезный следующий шаг.",
           ].join(" ");
-      aiText = await requestGroq(
+      aiText = await requestOllama(
         [
           ...aiHistory,
           { role: "assistant", content: aiText },
@@ -909,6 +891,11 @@ async function start() {
   }
 
   await db.initDatabase();
+
+  console.log(`AI provider: Ollama`);
+  console.log(`Ollama URL: ${OLLAMA_BASE_URL}`);
+  console.log(`Ollama model: ${OLLAMA_MODEL}`);
+  await probeOllama();
 
   if (hasClientBuild) {
     console.log(`Serving client build from ${CLIENT_DIST_PATH}`);

@@ -19,46 +19,13 @@ function hasUnlimitedAccess(user) {
 }
 
 async function getAiQuota(db, userId, user) {
-  if (hasUnlimitedAccess(user)) {
-    return {
-      hasUnlimited: true,
-      limit: null,
-      used: 0,
-      remaining: null,
-      windowHours: AI_WINDOW_HOURS,
-      resetAtMs: null,
-    };
-  }
-
-  const usage = await db.get(
-    `SELECT
-       COUNT(*) AS used,
-       MIN(created_at) AS oldestInWindow
-     FROM user_xp_logs
-     WHERE user_id = ?
-       AND source = 'message'
-       AND created_at >= datetime('now', '-24 hours')`,
-    [userId]
-  );
-
-  const used = Number(usage?.used || 0);
-  const remaining = Math.max(0, AI_MESSAGE_LIMIT - used);
-
-  let resetAtMs = null;
-  if (usage?.oldestInWindow) {
-    const oldest = parseSqliteDateUtc(usage.oldestInWindow);
-    if (oldest) {
-      resetAtMs = oldest.getTime() + AI_WINDOW_HOURS * 60 * 60 * 1000;
-    }
-  }
-
   return {
-    hasUnlimited: false,
-    limit: AI_MESSAGE_LIMIT,
-    used,
-    remaining,
+    hasUnlimited: true,
+    limit: null,
+    used: 0,
+    remaining: null,
     windowHours: AI_WINDOW_HOURS,
-    resetAtMs,
+    resetAtMs: null,
   };
 }
 

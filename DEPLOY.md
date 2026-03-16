@@ -31,13 +31,24 @@ cd /var/www/michaelgpt/server
 npm install
 ```
 
+Install and prepare Ollama:
+
+```bash
+curl -fsSL https://ollama.com/install.sh | sh
+sudo systemctl enable ollama
+sudo systemctl start ollama
+ollama pull llama3.1:8b
+```
+
 Create `server/.env` with at least:
 
 ```bash
 PORT=5000
 JWT_SECRET=replace-with-a-long-random-secret
-GROQ_API_KEY=replace-with-your-key
 NODE_ENV=production
+OLLAMA_BASE_URL=http://127.0.0.1:11434
+OLLAMA_MODEL=llama3.1:8b
+OLLAMA_KEEP_ALIVE=30m
 ```
 
 Build the frontend:
@@ -87,6 +98,7 @@ npm install
 cd /var/www/michaelgpt/server
 npm install
 npm run build
+ollama pull llama3.1:8b
 sudo systemctl restart michaelgpt
 sudo systemctl reload nginx
 ```
@@ -102,7 +114,7 @@ curl http://127.0.0.1:5000/api/health
 Expected result:
 
 ```json
-{"ok":true}
+{"ok":true,"aiProvider":"ollama","model":"llama3.1:8b"}
 ```
 
 If the public site still returns `403`, `nginx` is still serving the wrong site
