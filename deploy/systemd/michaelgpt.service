@@ -1,0 +1,16 @@
+[Unit]
+Description=MichaelGPT web application
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/var/www/michaelgpt/server
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/npm start
+Restart=always
+RestartSec=5
+User=www-data
+Group=www-data
+
+[Install]
+WantedBy=multi-user.target

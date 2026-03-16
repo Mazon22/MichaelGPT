@@ -1,5 +1,7 @@
 ﻿require("dotenv").config();
 
+const fs = require("fs");
+const path = require("path");
 const express = require("express");
 const cors = require("cors");
 const bcrypt = require("bcryptjs");
@@ -41,6 +43,8 @@ const GROQ_MODEL =
   process.env.GROQ_MODEL || "meta-llama/llama-4-scout-17b-16e-instruct";
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const GROQ_RESPONSES_API_URL = "https://api.groq.com/openai/v1/responses";
+const CLIENT_DIST_PATH = path.resolve(__dirname, "../client/dist");
+const CLIENT_INDEX_PATH = path.join(CLIENT_DIST_PATH, "index.html");
 const SYSTEM_PROMPT =
   "\u0422\u044b MichaelGPT - \u0443\u043c\u043d\u044b\u0439, \u0434\u0440\u0443\u0436\u0435\u043b\u044e\u0431\u043d\u044b\u0439 \u0438 \u043f\u043e\u043b\u0435\u0437\u043d\u044b\u0439 AI-\u0430\u0441\u0441\u0438\u0441\u0442\u0435\u043d\u0442. \u041e\u0442\u0432\u0435\u0447\u0430\u0439 \u043f\u043e\u0434\u0440\u043e\u0431\u043d\u043e \u0438 \u0438\u043d\u0444\u043e\u0440\u043c\u0430\u0442\u0438\u0432\u043d\u043e.";
 
@@ -152,6 +156,9 @@ function isCasualGreetingPrompt(text) {
 }
 
 const app = express();
+const hasClientBuild = fs.existsSync(CLIENT_INDEX_PATH);
+
+app.set("trust proxy", 1);
 
 if (!GROQ_API_KEY) {
   console.warn(
@@ -426,6 +433,12 @@ app.post(
   }),
 );
 
+app.get(
+  "/api/health",
+  asyncHandler(async (_req, res) => {
+    return res.json({ ok: true });
+  }),
+);
 app.get(
   "/api/ai/status",
   authMiddleware,
@@ -856,6 +869,21 @@ app.post(
   }),
 );
 
+if (hasClientBuild) {
+  app.use(express.static(CLIENT_DIST_PATH));
+
+  app.get(/^(?!\/api(?:\/|$)).*/, (req, res, next) => {
+    const acceptsHtml = req.accepts(["html", "json", "text"]) === "html";
+    const looksLikeFileRequest = path.extname(req.path) !== "";
+
+    if (!acceptsHtml || looksLikeFileRequest) {
+      return next();
+    }
+
+    return res.sendFile(CLIENT_INDEX_PATH);
+  });
+}
+
 app.use((_req, res) => {
   res.status(404).json({ error: "РњР°СЂС€СЂСѓС‚ РЅРµ РЅР°Р№РґРµРЅ" });
 });
@@ -881,6 +909,14 @@ async function start() {
   }
 
   await db.initDatabase();
+
+  if (hasClientBuild) {
+    console.log(`Serving client build from ${CLIENT_DIST_PATH}`);
+  } else {
+    console.warn(
+      `Client build not found at ${CLIENT_INDEX_PATH}. Build the frontend with "npm run build" in /client before production deploy.`,
+    );
+  }
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server started on port ${PORT}`);

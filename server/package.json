@@ -4,7 +4,8 @@
   "description": "Backend server for MichaelGPT",
   "main": "server.js",
   "scripts": {
-    "build": "npm run check",
+    "build": "npm run check && npm run build:client",
+    "build:client": "npm --prefix ../client run build",
     "check": "node --check server.js",
     "start": "node server.js",
     "dev": "nodemon server.js"
