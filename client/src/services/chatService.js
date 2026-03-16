@@ -17,7 +17,9 @@ export const chatService = {
     return api.get(`/chats/${chatId}/messages`);
   },
   sendMessage(chatId, payload) {
-    return api.post(`/chats/${chatId}/messages`, payload);
+    return api.post(`/chats/${chatId}/messages`, payload, {
+      timeout: 240000,
+    });
   },
   uploadFile(file, onProgress) {
     const formData = new FormData();

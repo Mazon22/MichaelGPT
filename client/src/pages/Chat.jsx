@@ -731,6 +731,9 @@ export default function Chat() {
     });
 
     const getErrorText = (error) => {
+      if (error?.code === 'ECONNABORTED' || String(error?.message || '').includes('timeout')) {
+        return 'Сервер отвечает слишком долго. Подождите и попробуйте снова через минуту.';
+      }
       if (error?.response?.data?.details) return error.response.data.details;
       if (error?.response?.data?.error) return error.response.data.error;
       if (error?.message) return error.message;
@@ -862,6 +865,7 @@ export default function Chat() {
       setProfileStats(null);
       await loadAiQuota();
     } catch (error) {
+      stopStreaming();
       if (isMountedRef.current && currentChatIdRef.current === activeChatId) {
         setPendingAttachments((prev) => [...readyAttachments, ...prev]);
         const errText = getErrorText(error);
@@ -894,10 +898,11 @@ export default function Chat() {
       }
     } finally {
       if (isMountedRef.current) {
+        setStreamingMessage(null);
         setIsLoading(false);
       }
     }
-  }, [aiQuota, currentChat, inputValue, isLoading, loadAiQuota, messages, pendingAttachments, responseMode, waitForDelay]);
+  }, [aiQuota, currentChat, inputValue, isLoading, loadAiQuota, messages, pendingAttachments, responseMode, stopStreaming, waitForDelay]);
 
   const copyMessage = useCallback(async (content, id) => {
     try {
