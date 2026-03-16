@@ -37,7 +37,7 @@ Install and prepare Ollama:
 curl -fsSL https://ollama.com/install.sh | sh
 sudo systemctl enable ollama
 sudo systemctl start ollama
-ollama pull llama3.1:8b
+ollama pull qwen2.5:0.5b
 ```
 
 Create `server/.env` with at least:
@@ -47,9 +47,16 @@ PORT=5000
 JWT_SECRET=replace-with-a-long-random-secret
 NODE_ENV=production
 OLLAMA_BASE_URL=http://127.0.0.1:11434
-OLLAMA_MODEL=llama3.1:8b
-OLLAMA_KEEP_ALIVE=30m
+OLLAMA_MODEL=qwen2.5:0.5b
+OLLAMA_LOW_MEMORY_MODEL=qwen2.5:0.5b
+OLLAMA_LOW_MEMORY_MODE=true
+OLLAMA_KEEP_ALIVE=2m
+OLLAMA_NUM_CTX=1536
+OLLAMA_MAX_HISTORY_MESSAGES=8
+OLLAMA_MAX_HISTORY_CHARS=9000
 ```
+
+For a `1 GB RAM` VPS, keep these values small. Do not use `llama3.1:8b`.
 
 Build the frontend:
 
@@ -68,6 +75,17 @@ sudo systemctl daemon-reload
 sudo systemctl enable michaelgpt
 sudo systemctl restart michaelgpt
 sudo systemctl status michaelgpt
+```
+
+## PM2
+
+If you run the app with `pm2`, use the tuned ecosystem file for low-memory VPS:
+
+```bash
+cd /var/www/michaelgpt
+pm2 delete michaelgpt || true
+pm2 start deploy/pm2/ecosystem.config.cjs
+pm2 save
 ```
 
 ## nginx
@@ -98,7 +116,7 @@ npm install
 cd /var/www/michaelgpt/server
 npm install
 npm run build
-ollama pull llama3.1:8b
+ollama pull qwen2.5:0.5b
 sudo systemctl restart michaelgpt
 sudo systemctl reload nginx
 ```
@@ -114,7 +132,7 @@ curl http://127.0.0.1:5000/api/health
 Expected result:
 
 ```json
-{"ok":true,"aiProvider":"ollama","model":"llama3.1:8b"}
+{"ok":true,"aiProvider":"ollama","model":"qwen2.5:0.5b","lowMemoryModel":"qwen2.5:0.5b","numCtx":1536}
 ```
 
 If the public site still returns `403`, `nginx` is still serving the wrong site

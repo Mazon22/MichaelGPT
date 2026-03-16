@@ -36,11 +36,23 @@ const {
 
 const PORT = Number(process.env.PORT || 5000);
 const JWT_SECRET = process.env.JWT_SECRET;
+const OLLAMA_LOW_MEMORY_MODEL =
+  process.env.OLLAMA_LOW_MEMORY_MODEL || "qwen2.5:0.5b";
 const OLLAMA_BASE_URL = String(
   process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434",
 ).replace(/\/+$/, "");
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "llama3.1:8b";
-const OLLAMA_KEEP_ALIVE = process.env.OLLAMA_KEEP_ALIVE || "30m";
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL || OLLAMA_LOW_MEMORY_MODEL;
+const OLLAMA_KEEP_ALIVE = process.env.OLLAMA_KEEP_ALIVE || "2m";
+const OLLAMA_LOW_MEMORY_MODE = process.env.OLLAMA_LOW_MEMORY_MODE !== "false";
+const OLLAMA_NUM_CTX = normalizePositiveInteger(process.env.OLLAMA_NUM_CTX, 1536);
+const OLLAMA_MAX_HISTORY_MESSAGES = normalizePositiveInteger(
+  process.env.OLLAMA_MAX_HISTORY_MESSAGES,
+  8,
+);
+const OLLAMA_MAX_HISTORY_CHARS = normalizePositiveInteger(
+  process.env.OLLAMA_MAX_HISTORY_CHARS,
+  9000,
+);
 const OLLAMA_CHAT_API_URL = `${OLLAMA_BASE_URL}/api/chat`;
 const OLLAMA_TAGS_API_URL = `${OLLAMA_BASE_URL}/api/tags`;
 const CLIENT_DIST_PATH = path.resolve(__dirname, "../client/dist");
@@ -84,12 +96,12 @@ function getModeInstruction(mode) {
 
 function getModeSettings(mode) {
   if (mode === "short") {
-    return { maxTokens: 220, temperature: 0.4 };
+    return { maxTokens: 120, temperature: 0.35 };
   }
   if (mode === "deep") {
-    return { maxTokens: 4096, temperature: 0.75 };
+    return { maxTokens: 768, temperature: 0.6 };
   }
-  return { maxTokens: 1400, temperature: 0.7 };
+  return { maxTokens: 320, temperature: 0.5 };
 }
 
 function enforceModeOutput(text, mode) {
@@ -153,6 +165,15 @@ function isCasualGreetingPrompt(text) {
   return /^(привет|хай|hello|hi|здравствуй|здравствуйте|добрый день|доброе утро|добрый вечер|йо|ку)\b/.test(
     normalized,
   );
+}
+
+function normalizePositiveInteger(value, fallback) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback;
+  }
+
+  return Math.floor(parsed);
 }
 
 const app = express();
@@ -238,19 +259,59 @@ async function getChatById(chatId, userId) {
 }
 
 function buildOllamaMessages(messages, responseMode) {
+  const preparedMessages = [];
+  const recentMessages = Array.isArray(messages)
+    ? messages.slice(-OLLAMA_MAX_HISTORY_MESSAGES)
+    : [];
+  let remainingChars = OLLAMA_MAX_HISTORY_CHARS;
+
+  for (let index = recentMessages.length - 1; index >= 0; index -= 1) {
+    const message = recentMessages[index];
+    const promptContent = String(buildMessagePromptContent(message) || "").trim();
+    if (!promptContent) continue;
+    if (remainingChars <= 0) break;
+
+    const content =
+      promptContent.length > remainingChars
+        ? `${promptContent.slice(0, Math.max(80, remainingChars - 24)).trimEnd()}\n...[context trimmed]`
+        : promptContent;
+
+    preparedMessages.unshift({
+      role: message.role === "assistant" ? "assistant" : "user",
+      content,
+    });
+    remainingChars -= content.length;
+  }
+
   return [
     { role: "system", content: SYSTEM_PROMPT },
     { role: "system", content: getModeInstruction(responseMode) },
-    ...messages.map((message) => ({
-      role: message.role === "assistant" ? "assistant" : "user",
-      content: buildMessagePromptContent(message),
-    })),
+    {
+      role: "system",
+      content: `Ограничения сервера: держи ответ компактным и практичным. Используй только недавний контекст чата.`,
+    },
+    ...preparedMessages,
   ];
 }
 
+function isOllamaMemoryError(details) {
+  const text = String(details || "").toLowerCase();
+  return (
+    text.includes("requires more system memory") ||
+    text.includes("available") && text.includes("memory") ||
+    text.includes("not enough memory") ||
+    text.includes("insufficient memory")
+  );
+}
+
 function formatOllamaError(error) {
-  if (error?.response?.data?.error) {
-    return String(error.response.data.error);
+  const responseError = error?.response?.data?.error;
+  if (responseError) {
+    const message = String(responseError);
+    if (isOllamaMemoryError(message)) {
+      return `На сервере не хватает RAM для модели "${OLLAMA_MODEL}". Для этого VPS будет использоваться облегченный профиль. Установите модель "${OLLAMA_LOW_MEMORY_MODEL}" командой "ollama pull ${OLLAMA_LOW_MEMORY_MODEL}".`;
+    }
+    return message;
   }
   if (error?.response?.data?.message) {
     return String(error.response.data.message);
@@ -264,37 +325,75 @@ function formatOllamaError(error) {
   return error?.message || "Неизвестная ошибка Ollama";
 }
 
-async function requestOllama(messages, responseMode = "balanced") {
+async function requestOllamaWithModel(
+  model,
+  messages,
+  responseMode = "balanced",
+) {
   const modeSettings = getModeSettings(responseMode);
 
-  try {
-    const response = await axios.post(
-      OLLAMA_CHAT_API_URL,
-      {
-        model: OLLAMA_MODEL,
-        messages: buildOllamaMessages(messages, responseMode),
-        stream: false,
-        keep_alive: OLLAMA_KEEP_ALIVE,
-        options: {
-          temperature: modeSettings.temperature,
-          num_predict: modeSettings.maxTokens,
-        },
+  const response = await axios.post(
+    OLLAMA_CHAT_API_URL,
+    {
+      model,
+      messages: buildOllamaMessages(messages, responseMode),
+      stream: false,
+      keep_alive: OLLAMA_KEEP_ALIVE,
+      options: {
+        temperature: modeSettings.temperature,
+        num_predict: modeSettings.maxTokens,
+        num_ctx: OLLAMA_NUM_CTX,
       },
-      {
-        headers: {
-          "Content-Type": "application/json",
-        },
-        timeout: 180000,
+    },
+    {
+      headers: {
+        "Content-Type": "application/json",
       },
-    );
+      timeout: 180000,
+    },
+  );
 
-    const content = String(response?.data?.message?.content || "").trim();
-    if (!content) {
-      throw createError(502, "Пустой ответ от Ollama");
+  const content = String(response?.data?.message?.content || "").trim();
+  if (!content) {
+    throw createError(502, "Пустой ответ от Ollama");
+  }
+
+  return content;
+}
+
+async function requestOllama(messages, responseMode = "balanced") {
+  try {
+    return await requestOllamaWithModel(OLLAMA_MODEL, messages, responseMode);
+  } catch (error) {
+    const details =
+      error?.details ||
+      error?.response?.data?.error ||
+      error?.response?.data?.message ||
+      error?.message ||
+      "";
+
+    if (
+      isOllamaMemoryError(details) &&
+      OLLAMA_MODEL !== OLLAMA_LOW_MEMORY_MODEL
+    ) {
+      try {
+        console.warn(
+          `Model "${OLLAMA_MODEL}" exceeded memory limits. Retrying with "${OLLAMA_LOW_MEMORY_MODEL}".`,
+        );
+        return await requestOllamaWithModel(
+          OLLAMA_LOW_MEMORY_MODEL,
+          messages,
+          responseMode,
+        );
+      } catch (fallbackError) {
+        throw createError(
+          502,
+          "Ошибка получения ответа от AI",
+          formatOllamaError(fallbackError),
+        );
+      }
     }
 
-    return content;
-  } catch (error) {
     throw createError(502, "Ошибка получения ответа от AI", formatOllamaError(error));
   }
 }
@@ -304,15 +403,23 @@ async function probeOllama() {
     const response = await axios.get(OLLAMA_TAGS_API_URL, { timeout: 5000 });
     const models = Array.isArray(response?.data?.models) ? response.data.models : [];
     const hasConfiguredModel = models.some((model) => model?.name === OLLAMA_MODEL);
+    const hasLowMemoryModel = models.some(
+      (model) => model?.name === OLLAMA_LOW_MEMORY_MODEL,
+    );
 
     if (hasConfiguredModel) {
       console.log(`Ollama is reachable. Model ready: ${OLLAMA_MODEL}`);
-      return;
+    } else {
+      console.warn(
+        `Ollama is reachable, but model "${OLLAMA_MODEL}" is not installed yet. Run "ollama pull ${OLLAMA_MODEL}".`,
+      );
     }
 
-    console.warn(
-      `Ollama is reachable, but model "${OLLAMA_MODEL}" is not installed yet. Run "ollama pull ${OLLAMA_MODEL}".`,
-    );
+    if (!hasLowMemoryModel) {
+      console.warn(
+        `Low-memory model "${OLLAMA_LOW_MEMORY_MODEL}" is not installed yet. Run "ollama pull ${OLLAMA_LOW_MEMORY_MODEL}".`,
+      );
+    }
   } catch (error) {
     console.warn(`Ollama probe failed: ${formatOllamaError(error)}`);
   }
@@ -418,7 +525,13 @@ app.post(
 app.get(
   "/api/health",
   asyncHandler(async (_req, res) => {
-    return res.json({ ok: true, aiProvider: "ollama", model: OLLAMA_MODEL });
+    return res.json({
+      ok: true,
+      aiProvider: "ollama",
+      model: OLLAMA_MODEL,
+      lowMemoryModel: OLLAMA_LOW_MEMORY_MODEL,
+      numCtx: OLLAMA_NUM_CTX,
+    });
   }),
 );
 app.get(
@@ -662,7 +775,7 @@ app.post(
     const rawAiText = await requestOllama(aiHistory, responseMode);
     let aiText = enforceModeOutput(rawAiText, responseMode);
     const isCasualGreeting = isCasualGreetingPrompt(content);
-    if (responseMode === "deep" && isDeepTooShort(aiText)) {
+    if (!OLLAMA_LOW_MEMORY_MODE && responseMode === "deep" && isDeepTooShort(aiText)) {
       const expansionPrompt = isCasualGreeting
         ? "Пользователь поздоровался. Ответь дружелюбно и развернуто в 3-5 предложений, без списков и без искусственных секций."
         : [
@@ -681,7 +794,11 @@ app.post(
         "deep",
       );
     }
-    if (responseMode === "balanced" && isBalancedTooShort(aiText)) {
+    if (
+      !OLLAMA_LOW_MEMORY_MODE &&
+      responseMode === "balanced" &&
+      isBalancedTooShort(aiText)
+    ) {
       const expansionPrompt = isCasualGreeting
         ? "Пользователь поздоровался. Дай теплый стандартный ответ в 2-3 предложениях, без списков."
         : [
@@ -895,6 +1012,12 @@ async function start() {
   console.log(`AI provider: Ollama`);
   console.log(`Ollama URL: ${OLLAMA_BASE_URL}`);
   console.log(`Ollama model: ${OLLAMA_MODEL}`);
+  console.log(`Ollama low-memory model: ${OLLAMA_LOW_MEMORY_MODEL}`);
+  console.log(`Ollama low-memory mode: ${OLLAMA_LOW_MEMORY_MODE}`);
+  console.log(`Ollama num_ctx: ${OLLAMA_NUM_CTX}`);
+  console.log(
+    `Ollama history budget: ${OLLAMA_MAX_HISTORY_MESSAGES} messages / ${OLLAMA_MAX_HISTORY_CHARS} chars`,
+  );
   await probeOllama();
 
   if (hasClientBuild) {
